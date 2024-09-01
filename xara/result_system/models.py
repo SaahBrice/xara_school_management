@@ -166,6 +166,10 @@ class User(AbstractUser):
     user_type = models.CharField(max_length=1, choices=USER_TYPE_CHOICES)
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='users', null=True, blank=True) 
     phone = models.CharField(max_length=20, blank=True)
+    
+    def toggle_active(self):
+        self.is_active = not self.is_active
+        self.save()
 
     def __str__(self):
         return f"{self.get_full_name()} ({self.get_user_type_display()})"
@@ -177,7 +181,7 @@ class Teacher(models.Model):
 
     def truncated_qualifications(self):
         return Truncator(self.qualifications).chars(15)
-        
+
     def __str__(self):
         return self.user.get_full_name()
 

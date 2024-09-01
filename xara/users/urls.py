@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     AddTeacherView, CustomLoginView, CustomLogoutView, DashboardView, DeleteTeacherView, EditTeacherView,
     GenericDashboardView, TeacherDashboardView, SecretaryDashboardView, TeacherDetailView,
-    TeacherListView
+    TeacherListView, ToggleTeacherActiveView
 )
 
 urlpatterns = [
@@ -17,4 +17,5 @@ urlpatterns = [
     path('teachers/edit/<int:pk>/', EditTeacherView.as_view(), name='edit_teacher'),
     path('teachers/delete/<int:pk>/', DeleteTeacherView.as_view(), name='delete_teacher'),
     path('teachers/view/<int:pk>/', TeacherDetailView.as_view(), name='view_teacher'),
+    path('teachers/toggle-active/<int:pk>/', ToggleTeacherActiveView.as_view(), name='toggle_teacher_active'),
 ]

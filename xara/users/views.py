@@ -3,7 +3,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
 from django.views.generic import TemplateView, RedirectView
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.shortcuts import redirect
+from django.shortcuts import redirect, get_object_or_404
 from result_system.models import Subject, Teacher, Class, Student, TeacherSubject, User
 from django.views.generic import ListView
 from django.views.generic import DetailView, ListView, CreateView, UpdateView, DeleteView
@@ -13,6 +13,8 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Prefetch
 from django.db import transaction
 import json
+from django.urls import reverse
+from django.views import View
 
 
 class CustomLoginView(LoginView):
@@ -117,17 +119,29 @@ class AddTeacherView(SecretaryRequiredMixin, CreateView):
     template_name = 'users/add_teacher.html'
     success_url = reverse_lazy('teacher_list')
 
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['school'] = self.request.user.school
+        return kwargs
+
     @transaction.atomic
     def form_valid(self, form):
         user = form.save(commit=False)
         user.school = self.request.user.school
         user.user_type = User.TEACHER
         user.save()
-        
+
         teacher = Teacher.objects.create(
             user=user,
             qualifications=form.cleaned_data['qualifications']
         )
+
+        messages.success(
+            self.request, 
+            f"Teacher {user.get_full_name()} has been added successfully. "
+            f"You may now assign them to classes and subjects."
+        )
+
         return super().form_valid(form)
 
 
@@ -210,3 +224,13 @@ class TeacherDetailView(SecretaryRequiredMixin, DetailView):
             teacher=self.object
         ).select_related('subject', 'class_obj').order_by('class_obj__name', 'subject__name')
         return context
+
+
+
+class ToggleTeacherActiveView(View):
+    def post(self, request, pk):
+        teacher = get_object_or_404(Teacher, pk=pk)
+        teacher.user.toggle_active()
+        status = "activated" if teacher.user.is_active else "deactivated"
+        messages.success(request, f"Teacher {teacher.user.get_full_name()} has been {status}.")
+        return redirect(reverse('teacher_list'))
