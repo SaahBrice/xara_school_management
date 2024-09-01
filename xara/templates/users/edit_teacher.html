@@ -1,0 +1,101 @@
+{% extends "users/dashboard_base.html" %}
+
+{% block title %}Edit Teacher - {{ object.user.get_full_name }}{% endblock title %}
+
+{% block page_title %}Edit Teacher{% endblock %}
+
+{% block dashboard_content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <form method="post" x-data="teacherForm()" @submit.prevent="submitForm">
+            {% csrf_token %}
+            {% for field in form %}
+                {% if field.name != 'assignments' %}
+                    <div class="mb-3">
+                        <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.help_text %}
+                            <small class="form-text text-muted">{{ field.help_text }}</small>
+                        {% endif %}
+                        {% for error in field.errors %}
+                            <div class="invalid-feedback d-block">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endfor %}
+
+            <div class="mb-3">
+                <label class="form-label">Teaching Assignments</label>
+                <template x-for="(classObj, classIndex) in classes" :key="classObj.id">
+                    <div class="card mb-2">
+                        <div class="card-header">
+                            <input type="checkbox" :id="'class_' + classObj.id" x-model="classObj.selected" @change="toggleClass(classIndex)">
+                            <label :for="'class_' + classObj.id" x-text="classObj.name"></label>
+                        </div>
+                        <div class="card-body" x-show="classObj.selected">
+                            <template x-for="subject in classObj.subjects" :key="subject.id">
+                                <div class="form-check">
+                                    <input type="checkbox" 
+                                           :id="'subject_' + classObj.id + '_' + subject.id" 
+                                           :value="subject.id" 
+                                           x-model="classObj.selectedSubjects"
+                                           class="form-check-input">
+                                    <label :for="'subject_' + classObj.id + '_' + subject.id" 
+                                           class="form-check-label" 
+                                           x-text="subject.name"></label>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Update Teacher</button>
+            <a href="{% url 'teacher_list' %}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock dashboard_content %}
+
+{% block extra_js %}
+<script>
+function teacherForm() {
+    return {
+        classes: {{ classes_json|safe }},
+        initialAssignments: {{ initial_assignments|safe }},
+        init() {
+            this.classes.forEach(classObj => {
+                classObj.selected = this.initialAssignments.some(assignment => assignment[0] === classObj.id);
+                classObj.selectedSubjects = this.initialAssignments
+                    .filter(assignment => assignment[0] === classObj.id)
+                    .map(assignment => assignment[1]);
+            });
+        },
+        toggleClass(classIndex) {
+            if (!this.classes[classIndex].selected) {
+                this.classes[classIndex].selectedSubjects = [];
+            }
+        },
+        submitForm() {
+            const form = this.$el;
+            const assignmentsInput = document.createElement('input');
+            assignmentsInput.type = 'hidden';
+            assignmentsInput.name = 'assignments';
+            assignmentsInput.value = JSON.stringify(this.getSelectedAssignments());
+            form.appendChild(assignmentsInput);
+            form.submit();
+        },
+        getSelectedAssignments() {
+            return this.classes
+                .filter(classObj => classObj.selected)
+                .flatMap(classObj => 
+                    classObj.selectedSubjects.map(subjectId => ({
+                        class_id: classObj.id,
+                        subject_id: subjectId
+                    }))
+                );
+        }
+    }
+}
+</script>
+{% endblock extra_js %}

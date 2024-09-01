@@ -1,0 +1,46 @@
+{% extends "users/dashboard_base.html" %}
+
+{% block title %}Teacher Details - {{ teacher.user.get_full_name }}{% endblock title %}
+
+{% block page_title %}Teacher Details{% endblock %}
+
+{% block dashboard_content %}
+<div class="card">
+    <div class="card-body">
+        <h2 class="card-title">{{ teacher.user.get_full_name }}</h2>
+        <p><strong>Email:</strong> {{ teacher.user.email }}</p>
+        <p><strong>Phone:</strong> {{ teacher.user.phone }}</p>
+        <p><strong>Date Joined:</strong> {{ teacher.date_joined }}</p>
+        <p><strong>Qualifications:</strong> {{ teacher.qualifications }}</p>
+    </div>
+</div>
+
+<h3 class="mt-4">Teaching Assignments</h3>
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Class</th>
+                <th>Subject</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for assignment in teaching_assignments %}
+            <tr>
+                <td>{{ assignment.class_obj.name }}</td>
+                <td>{{ assignment.subject.name }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="2">No teaching assignments found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="mt-3">
+    <a href="{% url 'edit_teacher' pk=teacher.pk %}" class="btn btn-primary">Edit</a>
+    <a href="{% url 'teacher_list' %}" class="btn btn-secondary">Back to List</a>
+</div>
+{% endblock dashboard_content %}
