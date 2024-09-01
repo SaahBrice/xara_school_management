@@ -1,0 +1,25 @@
+{% extends "users/dashboard_base.html" %}
+
+{% block title %}{% if form.instance.pk %}Edit{% else %}Add{% endif %} Class - Xara School Management System{% endblock %}
+
+{% block page_title %}{% if form.instance.pk %}Edit{% else %}Add{% endif %} Class{% endblock %}
+
+{% block dashboard_content %}
+<form method="post">
+    {% csrf_token %}
+    {% for field in form %}
+        <div class="mb-3">
+            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}
+                <small class="form-text text-muted">{{ field.help_text }}</small>
+            {% endif %}
+            {% for error in field.errors %}
+                <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+        </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary">{% if form.instance.pk %}Update{% else %}Create{% endif %} Class</button>
+    <a href="{% url 'class_list' %}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}

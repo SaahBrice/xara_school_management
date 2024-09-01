@@ -1,6 +1,6 @@
 from django.urls import path
 from .views import (
-    AddTeacherView, CustomLoginView, CustomLogoutView, DashboardView, DeleteTeacherView, EditTeacherView,
+    AddTeacherView, ClassCreateView, ClassDeleteView, ClassListView, ClassUpdateView, CustomLoginView, CustomLogoutView, DashboardView, DeleteTeacherView, EditTeacherView,
     GenericDashboardView, TeacherDashboardView, SecretaryDashboardView, TeacherDetailView,
     TeacherListView, ToggleTeacherActiveView
 )
@@ -18,4 +18,8 @@ urlpatterns = [
     path('teachers/delete/<int:pk>/', DeleteTeacherView.as_view(), name='delete_teacher'),
     path('teachers/view/<int:pk>/', TeacherDetailView.as_view(), name='view_teacher'),
     path('teachers/toggle-active/<int:pk>/', ToggleTeacherActiveView.as_view(), name='toggle_teacher_active'),
+    path('classes/', ClassListView.as_view(), name='class_list'),
+    path('classes/add/', ClassCreateView.as_view(), name='class_add'),
+    path('classes/<int:pk>/edit/', ClassUpdateView.as_view(), name='class_edit'),
+    path('classes/<int:pk>/delete/', ClassDeleteView.as_view(), name='class_delete'),
 ]

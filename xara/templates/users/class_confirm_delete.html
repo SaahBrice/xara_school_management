@@ -1,0 +1,17 @@
+{% extends "users/dashboard_base.html" %}
+
+{% block title %}Delete Class - Xara School Management System{% endblock %}
+
+{% block page_title %}Delete Class{% endblock %}
+
+{% block dashboard_content %}
+<div class="alert alert-danger">
+    <p>Are you sure you want to delete the class "{{ object.name }}"?</p>
+    <p>This action cannot be undone.</p>
+</div>
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Confirm Delete</button>
+    <a href="{% url 'class_list' %}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}

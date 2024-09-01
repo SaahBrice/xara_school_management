@@ -4,6 +4,53 @@ from result_system.models import Teacher, TeacherSubject, Class, Subject, ClassS
 
 User = get_user_model()
 
+
+
+
+
+
+
+
+
+class ClassForm(forms.ModelForm):
+    subjects = forms.ModelMultipleChoiceField(
+        queryset=Subject.objects.none(),
+        widget=forms.CheckboxSelectMultiple,
+        required=False
+    )
+
+    class Meta:
+        model = Class
+        fields = ['name', 'academic_year', 'capacity']
+
+    def __init__(self, *args, **kwargs):
+        self.school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+        if self.school:
+            self.fields['academic_year'].queryset = self.school.academic_years.all()
+            self.fields['subjects'].queryset = Subject.objects.filter(school=self.school)
+
+        if self.instance.pk:
+            self.fields['subjects'].initial = self.instance.subjects.all()
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if commit:
+            instance.save()
+            self.save_subjects(instance)
+        return instance
+
+    def save_subjects(self, instance):
+        instance.subjects.set(self.cleaned_data['subjects'])
+
+
+
+
+
+
+
+
+
 class TeacherForm(forms.ModelForm):
     qualifications = forms.CharField(widget=forms.Textarea, required=False)
     password = forms.CharField(widget=forms.PasswordInput, required=False)

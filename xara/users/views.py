@@ -4,10 +4,10 @@ from django.views.generic import TemplateView, RedirectView
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.shortcuts import redirect, get_object_or_404
-from result_system.models import Subject, Teacher, Class, Student, TeacherSubject, User
+from result_system.models import ClassSubject, Subject, Teacher, Class, Student, TeacherSubject, User
 from django.views.generic import ListView
 from django.views.generic import DetailView, ListView, CreateView, UpdateView, DeleteView
-from .forms import TeacherForm
+from .forms import ClassForm, TeacherForm
 from .mixins import SecretaryRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Prefetch
@@ -234,3 +234,67 @@ class ToggleTeacherActiveView(View):
         status = "activated" if teacher.user.is_active else "deactivated"
         messages.success(request, f"Teacher {teacher.user.get_full_name()} has been {status}.")
         return redirect(reverse('teacher_list'))
+
+
+
+
+
+class ClassListView(SecretaryRequiredMixin, ListView):
+    model = Class
+    template_name = 'users/class_list.html'
+    context_object_name = 'classes'
+    paginate_by = 20  # Number of classes per page
+
+    def get_queryset(self):
+        return Class.objects.filter(school=self.request.user.school).select_related('academic_year').prefetch_related(
+            Prefetch('subjects', queryset=ClassSubject.objects.select_related('subject'))
+        ).order_by('name')
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['total_classes'] = self.get_queryset().count()
+        return context
+
+
+
+
+
+class ClassCreateView(SecretaryRequiredMixin, CreateView):
+    model = Class
+    form_class = ClassForm
+    template_name = 'users/class_form.html'
+    success_url = reverse_lazy('class_list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['school'] = self.request.user.school
+        return kwargs
+
+    def form_valid(self, form):
+        form.instance.school = self.request.user.school
+        messages.success(self.request, 'Class created successfully.')
+        return super().form_valid(form)
+
+class ClassUpdateView(SecretaryRequiredMixin, UpdateView):
+    model = Class
+    form_class = ClassForm
+    template_name = 'users/class_form.html'
+    success_url = reverse_lazy('class_list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['school'] = self.request.user.school
+        return kwargs
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Class updated successfully.')
+        return super().form_valid(form)
+
+class ClassDeleteView(SecretaryRequiredMixin, DeleteView):
+    model = Class
+    template_name = 'users/class_confirm_delete.html'
+    success_url = reverse_lazy('class_list')
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, 'Class deleted successfully.')
+        return super().delete(request, *args, **kwargs)

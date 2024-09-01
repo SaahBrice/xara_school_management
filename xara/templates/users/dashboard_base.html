@@ -78,7 +78,7 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#">
+                            <a class="nav-link {% if 'class' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'class_list' %}">
                                 <i class="bi bi-grid"></i> Classes
                             </a>
                         </li>
