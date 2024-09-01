@@ -166,7 +166,7 @@ class User(AbstractUser):
     user_type = models.CharField(max_length=1, choices=USER_TYPE_CHOICES)
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='users', null=True, blank=True) 
     phone = models.CharField(max_length=20, blank=True)
-    
+
     def toggle_active(self):
         self.is_active = not self.is_active
         self.save()
@@ -239,27 +239,63 @@ class Student(models.Model):
         return f"{self.first_name} {self.last_name} ({self.matricula_code})"
 
     def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        old_class = None
+        if not is_new:
+            old_instance = Student.objects.get(pk=self.pk)
+            old_class = old_instance.current_class
+
         if not self.matricula_code:
             self.matricula_code = generate_matricula_code(self)
+
         super().save(*args, **kwargs)
 
-    def enroll_in_subject(self, class_subject):
+        if is_new or (self.current_class != old_class and self.current_class is not None):
+            self.enroll_in_class_subjects()
+
+    def enroll_in_class_subjects(self):
+        if self.current_class:
+            class_subjects = self.current_class.subjects.all()
+            current_academic_year = self.current_class.academic_year
+            for class_subject in class_subjects:
+                try:
+                    self.enroll_in_subject(class_subject, current_academic_year)
+                except ValidationError:
+                    # Handle the case where the class is full
+                    pass
+
+    def enroll_in_subject(self, class_subject, academic_year):
         if not class_subject.is_full():
-            StudentSubject.objects.create(
+            StudentSubject.objects.get_or_create(
                 student=self,
                 class_subject=class_subject,
-                academic_year=class_subject.class_obj.academic_year
+                academic_year=academic_year,
+                defaults={'is_active': True}
             )
         else:
             raise ValidationError("This subject has reached its maximum capacity for this class.")
 
-    def unenroll_from_subject(self, class_subject):
+    def unenroll_from_subject(self, class_subject, academic_year):
         StudentSubject.objects.filter(
             student=self,
             class_subject=class_subject,
-            academic_year=class_subject.class_obj.academic_year,
+            academic_year=academic_year,
             is_active=True
         ).update(is_active=False)
+
+    def get_current_subjects(self):
+        if self.current_class:
+            return StudentSubject.objects.filter(
+                student=self,
+                academic_year=self.current_class.academic_year,
+                is_active=True
+            )
+        return StudentSubject.objects.none()
+        
+    def get_full_name(self):
+        return f"{self.first_name} {self.last_name}"
+
+
 
 class StudentDocument(models.Model):
     DOCUMENT_TYPES = [

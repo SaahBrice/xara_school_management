@@ -5,9 +5,10 @@
 {% block page_title %}Classes ({{ total_classes }}){% endblock %}
 
 {% block dashboard_content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Classes</h2>
-    <a href="{% url 'class_add' %}" class="btn btn-primary">Add New Class</a>
+<div class="row mb-3">
+    <div class="col-12">
+        <a href="{% url 'class_add' %}" class="btn btn-primary">Add New Class</a>
+    </div>
 </div>
 
 <!-- Filter inputs -->

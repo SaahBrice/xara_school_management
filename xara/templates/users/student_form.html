@@ -1,0 +1,36 @@
+{% extends "users/dashboard_base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}{% if form.instance.pk %}Edit{% else %}Add{% endif %} Student{% endblock %}
+
+{% block dashboard_content %}
+<h2>{% if form.instance.pk %}Edit{% else %}Add{% endif %} Student</h2>
+
+<form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    {{ form|crispy }}
+    
+    <h3>Documents</h3>
+    {{ documents.management_form }}
+    {% for document_form in documents.forms %}
+        <div class="document-form">
+            {{ document_form|crispy }}
+        </div>
+    {% endfor %}
+    
+    <button type="submit" class="btn btn-primary">Save</button>
+    <a href="{% url 'student_list' %}" class="btn btn-secondary">Cancel</a>
+</form>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(function() {
+        $('.document-form').formset({
+            addText: 'Add another document',
+            deleteText: 'Remove this document'
+        });
+    });
+</script>
+{% endblock %}

@@ -1,13 +1,13 @@
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
-from django.views.generic import TemplateView, RedirectView
+from django.views.generic import TemplateView, RedirectView, FormView
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.shortcuts import redirect, get_object_or_404
-from result_system.models import ClassSubject, Subject, Teacher, Class, Student, TeacherSubject, User
+from result_system.models import ClassSubject, StudentSubject, Subject, Teacher, Class, Student, TeacherSubject, User
 from django.views.generic import ListView
 from django.views.generic import DetailView, ListView, CreateView, UpdateView, DeleteView
-from .forms import ClassForm, TeacherForm
+from .forms import ClassForm, StudentDocumentFormSet, StudentForm, StudentSubjectForm, TeacherForm
 from .mixins import SecretaryRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Prefetch
@@ -15,6 +15,7 @@ from django.db import transaction
 import json
 from django.urls import reverse
 from django.views import View
+from django.db.models import Q
 
 
 class CustomLoginView(LoginView):
@@ -290,6 +291,7 @@ class ClassUpdateView(SecretaryRequiredMixin, UpdateView):
         messages.success(self.request, 'Class updated successfully.')
         return super().form_valid(form)
 
+
 class ClassDeleteView(SecretaryRequiredMixin, DeleteView):
     model = Class
     template_name = 'users/class_confirm_delete.html'
@@ -298,3 +300,149 @@ class ClassDeleteView(SecretaryRequiredMixin, DeleteView):
     def delete(self, request, *args, **kwargs):
         messages.success(self.request, 'Class deleted successfully.')
         return super().delete(request, *args, **kwargs)
+
+
+
+class StudentListView(SecretaryRequiredMixin, ListView):
+    model = Student
+    template_name = 'users/student_list.html'
+    context_object_name = 'students'
+    paginate_by = 20
+
+    def get_queryset(self):
+        queryset = Student.objects.filter(school=self.request.user.school).select_related('current_class')
+        search_query = self.request.GET.get('search')
+        if search_query:
+            queryset = queryset.filter(
+                Q(first_name__icontains=search_query) |
+                Q(last_name__icontains=search_query) |
+                Q(matricula_code__icontains=search_query)
+            )
+        return queryset.order_by('last_name', 'first_name')
+
+class StudentCreateView(SecretaryRequiredMixin, CreateView):
+    model = Student
+    form_class = StudentForm
+    template_name = 'users/student_form.html'
+    success_url = reverse_lazy('student_list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['school'] = self.request.user.school
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        data = super().get_context_data(**kwargs)
+        if self.request.POST:
+            data['documents'] = StudentDocumentFormSet(self.request.POST, self.request.FILES)
+        else:
+            data['documents'] = StudentDocumentFormSet()
+        return data
+
+    @transaction.atomic
+    def form_valid(self, form):
+        context = self.get_context_data()
+        documents = context['documents']
+        form.instance.school = self.request.user.school
+        self.object = form.save()
+        if documents.is_valid():
+            documents.instance = self.object
+            documents.save()
+        messages.success(self.request, 'Student added successfully.')
+        return super().form_valid(form)
+
+class StudentUpdateView(SecretaryRequiredMixin, UpdateView):
+    model = Student
+    form_class = StudentForm
+    template_name = 'users/student_form.html'
+    success_url = reverse_lazy('student_list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['school'] = self.request.user.school
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        data = super().get_context_data(**kwargs)
+        if self.request.POST:
+            data['documents'] = StudentDocumentFormSet(self.request.POST, self.request.FILES, instance=self.object)
+        else:
+            data['documents'] = StudentDocumentFormSet(instance=self.object)
+        return data
+
+    @transaction.atomic
+    def form_valid(self, form):
+        context = self.get_context_data()
+        documents = context['documents']
+        self.object = form.save()
+        if documents.is_valid():
+            documents.instance = self.object
+            documents.save()
+        messages.success(self.request, 'Student updated successfully.')
+        return super().form_valid(form)
+
+class StudentDetailView(SecretaryRequiredMixin, DetailView):
+    model = Student
+    template_name = 'users/student_detail.html'
+    context_object_name = 'student'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['documents'] = self.object.documents.all()
+        context['enrolled_subjects'] = self.object.get_current_subjects().select_related('class_subject__subject')
+        return context
+
+class StudentDeleteView(SecretaryRequiredMixin, DeleteView):
+    model = Student
+    template_name = 'users/student_confirm_delete.html'
+    success_url = reverse_lazy('student_list')
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, 'Student deleted successfully.')
+        return super().delete(request, *args, **kwargs)
+
+
+
+class ManageStudentSubjectsView(SecretaryRequiredMixin, FormView):
+    form_class = StudentSubjectForm
+    template_name = 'users/manage_student_subjects.html'
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        self.student = get_object_or_404(Student, pk=self.kwargs['pk'])
+        kwargs['student'] = self.student
+        return kwargs
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['student'] = self.student
+        return context
+
+    def get_success_url(self):
+        return reverse_lazy('student_detail', kwargs={'pk': self.student.pk})
+
+    @transaction.atomic
+    def form_valid(self, form):
+        selected_subjects = form.cleaned_data['subjects']
+        current_subjects = set(self.student.get_current_subjects().values_list('class_subject_id', flat=True))
+
+        # Deactivate unselected subjects
+        subjects_to_deactivate = current_subjects - set(selected_subjects)
+        StudentSubject.objects.filter(
+            student=self.student,
+            class_subject_id__in=subjects_to_deactivate,
+            academic_year=self.student.current_class.academic_year,
+            is_active=True
+        ).update(is_active=False)
+
+        # Activate or create newly selected subjects
+        for subject in selected_subjects:
+            StudentSubject.objects.update_or_create(
+                student=self.student,
+                class_subject=subject,
+                academic_year=self.student.current_class.academic_year,
+                defaults={'is_active': True}
+            )
+
+        messages.success(self.request, "Student subjects updated successfully.")
+        return super().form_valid(form)

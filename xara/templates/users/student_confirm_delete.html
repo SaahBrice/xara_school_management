@@ -1,0 +1,18 @@
+{% extends "dashboard_base.html" %}
+
+{% block title %}Confirm Delete Student{% endblock %}
+
+{% block dashboard_content %}
+<div class="card">
+    <div class="card-body">
+        <h2 class="card-title">Confirm Delete</h2>
+        <p>Are you sure you want to delete the student "{{ object.get_full_name }}" ({{ object.matricula_code }})?</p>
+        <p class="text-danger">This action cannot be undone.</p>
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Confirm Delete</button>
+            <a href="{% url 'student_detail' object.pk %}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

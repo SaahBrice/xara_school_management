@@ -1,12 +1,51 @@
 from django import forms
 from django.contrib.auth import get_user_model
-from result_system.models import Teacher, TeacherSubject, Class, Subject, ClassSubject
+from result_system.models import Student, StudentDocument, Teacher, TeacherSubject, Class, Subject, ClassSubject
 
 User = get_user_model()
 
 
+class StudentSubjectForm(forms.Form):
+    subjects = forms.ModelMultipleChoiceField(
+        queryset=ClassSubject.objects.none(),
+        widget=forms.CheckboxSelectMultiple,
+        required=False
+    )
 
+    def __init__(self, *args, **kwargs):
+        self.student = kwargs.pop('student', None)
+        super().__init__(*args, **kwargs)
+        if self.student and self.student.current_class:
+            self.fields['subjects'].queryset = self.student.current_class.subjects.all()
+            self.initial['subjects'] = self.student.get_current_subjects().values_list('class_subject_id', flat=True)
 
+            
+class StudentDocumentForm(forms.ModelForm):
+    class Meta:
+        model = StudentDocument
+        fields = ['document_type', 'file', 'description']
+
+StudentDocumentFormSet = forms.inlineformset_factory(
+    Student, StudentDocument, form=StudentDocumentForm,
+    extra=1, can_delete=True
+)
+
+class StudentForm(forms.ModelForm):
+    class Meta:
+        model = Student
+        fields = ['first_name', 'last_name', 'current_class', 'date_of_birth', 'gender',
+                  'address', 'email', 'phone', 'parent_name', 'parent_contact',
+                  'parent_email', 'parent_address', 'picture']
+        widgets = {
+            'date_of_birth': forms.DateInput(attrs={'type': 'date'}),
+            'gender': forms.Select(choices=[('M', 'Male'), ('F', 'Female'), ('O', 'Other')]),
+        }
+
+    def __init__(self, *args, **kwargs):
+        school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+        if school:
+            self.fields['current_class'].queryset = Class.objects.filter(school=school)
 
 
 
@@ -31,7 +70,7 @@ class ClassForm(forms.ModelForm):
             self.fields['subjects'].queryset = Subject.objects.filter(school=self.school)
 
         if self.instance.pk:
-            self.fields['subjects'].initial = self.instance.subjects.all()
+            self.fields['subjects'].initial = Subject.objects.filter(classes__class_obj=self.instance)
 
     def save(self, commit=True):
         instance = super().save(commit=False)
@@ -41,7 +80,12 @@ class ClassForm(forms.ModelForm):
         return instance
 
     def save_subjects(self, instance):
-        instance.subjects.set(self.cleaned_data['subjects'])
+        # Clear existing subjects
+        ClassSubject.objects.filter(class_obj=instance).delete()
+        
+        # Add new subjects
+        for subject in self.cleaned_data['subjects']:
+            ClassSubject.objects.create(class_obj=instance, subject=subject)
 
 
 
