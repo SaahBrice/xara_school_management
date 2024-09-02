@@ -76,6 +76,9 @@ class Class(models.Model):
         unique_together = ('school', 'name', 'academic_year')
         verbose_name_plural = 'Classes'
 
+    def get_active_subjects(self):
+        return self.subjects.filter(is_active=True)
+        
     def __str__(self):
         return f"{self.name} - {self.academic_year.year}"
 
@@ -151,6 +154,7 @@ class ClassSubject(models.Model):
     subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='classes')
     credit = models.DecimalField(max_digits=3, decimal_places=1)
     max_students = models.PositiveIntegerField(default=2000, help_text="0 means no limit")
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         unique_together = ('class_obj', 'subject')

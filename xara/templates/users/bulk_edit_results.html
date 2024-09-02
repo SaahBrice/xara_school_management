@@ -47,16 +47,28 @@
 
 {% block extra_js %}
 <script>
+const results = {{ results_json|safe }};
+
 document.getElementById('exam').addEventListener('change', function() {
     const examId = this.value;
-    const results = {{ results|safe }};
     
     {% for student in students %}
         {% for class_subject in class_subjects %}
-        const input{{ student.id }}_{{ class_subject.id }} = document.getElementById('mark_{{ student.id }}_{{ class_subject.id }}');
-        input{{ student.id }}_{{ class_subject.id }}.value = results[[{{ student.id }}, {{ class_subject.id }}, examId]] ? results[[{{ student.id }}, {{ class_subject.id }}, examId]].mark : '';
+        (function() {
+            const input{{ student.id }}_{{ class_subject.id }} = document.getElementById('mark_{{ student.id }}_{{ class_subject.id }}');
+            const resultKey = '{{ student.id }}_{{ class_subject.id }}_' + examId;
+            input{{ student.id }}_{{ class_subject.id }}.value = results[resultKey] || '';
+        })();
         {% endfor %}
     {% endfor %}
+});
+
+// Load initial results if an exam is pre-selected
+window.addEventListener('load', function() {
+    const examSelect = document.getElementById('exam');
+    if (examSelect.value) {
+        examSelect.dispatchEvent(new Event('change'));
+    }
 });
 </script>
 {% endblock %}

@@ -17,6 +17,7 @@ import json
 from django.urls import reverse
 from django.views import View
 from django.db.models import Q
+from django.core.serializers.json import DjangoJSONEncoder
 
 
 
@@ -250,7 +251,7 @@ class ClassListView(SecretaryRequiredMixin, ListView):
 
     def get_queryset(self):
         return Class.objects.filter(school=self.request.user.school).select_related('academic_year').prefetch_related(
-            Prefetch('subjects', queryset=ClassSubject.objects.select_related('subject'))
+            Prefetch('subjects', queryset=ClassSubject.objects.select_related('subject').filter(is_active=True))
         ).order_by('name')
 
     def get_context_data(self, **kwargs):
@@ -396,7 +397,7 @@ class StudentDetailView(SecretaryRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['documents'] = self.object.documents.all()
-        context['enrolled_subjects'] = self.object.get_current_subjects().select_related('class_subject__subject')
+        context['enrolled_subjects'] = self.object.get_current_subjects().select_related('class_subject__subject').filter(class_subject__is_active=True)
         return context
 
 class StudentDeleteView(SecretaryRequiredMixin, DeleteView):
@@ -431,7 +432,7 @@ class ManageStudentSubjectsView(SecretaryRequiredMixin, FormView):
     @transaction.atomic
     def form_valid(self, form):
         selected_subjects = form.cleaned_data['subjects']
-        current_subjects = set(self.student.get_current_subjects().values_list('class_subject_id', flat=True))
+        current_subjects = set(self.student.get_current_subjects().filter(class_subject__is_active=True).values_list('class_subject_id', flat=True))
 
         # Deactivate unselected subjects
         subjects_to_deactivate = current_subjects - set(selected_subjects)
@@ -784,21 +785,23 @@ class ManageResultsView(LoginRequiredMixin, View):
 class EditStudentResultView(LoginRequiredMixin, View):
     def get(self, request, student_id):
         student = get_object_or_404(Student, id=student_id, school=request.user.school)
-        class_subjects = ClassSubject.objects.filter(class_obj=student.current_class)
+        class_subjects = ClassSubject.objects.filter(class_obj=student.current_class, is_active=True)
         exams = Exam.objects.filter(school=request.user.school, academic_year=student.current_class.academic_year)
         results = Result.objects.filter(student=student, class_subject__in=class_subjects)
+
+        results_dict = {f"{result.class_subject_id}_{result.exam_id}": result.mark for result in results}
 
         context = {
             'student': student,
             'class_subjects': class_subjects,
             'exams': exams,
-            'results': {(result.class_subject_id, result.exam_id): result for result in results}
+            'results_json': json.dumps(results_dict, cls=DjangoJSONEncoder)
         }
         return render(request, 'users/edit_student_result.html', context)
 
     def post(self, request, student_id):
         student = get_object_or_404(Student, id=student_id, school=request.user.school)
-        class_subjects = ClassSubject.objects.filter(class_obj=student.current_class)
+        class_subjects = ClassSubject.objects.filter(class_obj=student.current_class, is_active=True)
         exam_id = request.POST.get('exam')
         
         if not exam_id:
@@ -828,23 +831,25 @@ class BulkEditResultsView(LoginRequiredMixin, View):
     def get(self, request, class_id):
         class_obj = get_object_or_404(Class, id=class_id, school=request.user.school)
         students = Student.objects.filter(current_class=class_obj)
-        class_subjects = ClassSubject.objects.filter(class_obj=class_obj)
+        class_subjects = ClassSubject.objects.filter(class_obj=class_obj, is_active=True)
         exams = Exam.objects.filter(school=request.user.school, academic_year=class_obj.academic_year)
         results = Result.objects.filter(student__in=students, class_subject__in=class_subjects)
+
+        results_dict = {f"{result.student_id}_{result.class_subject_id}_{result.exam_id}": result.mark for result in results}
 
         context = {
             'class': class_obj,
             'students': students,
             'class_subjects': class_subjects,
             'exams': exams,
-            'results': {(result.student_id, result.class_subject_id, result.exam_id): result for result in results}
+            'results_json': json.dumps(results_dict, cls=DjangoJSONEncoder)
         }
         return render(request, 'users/bulk_edit_results.html', context)
 
     def post(self, request, class_id):
         class_obj = get_object_or_404(Class, id=class_id, school=request.user.school)
         students = Student.objects.filter(current_class=class_obj)
-        class_subjects = ClassSubject.objects.filter(class_obj=class_obj)
+        class_subjects = ClassSubject.objects.filter(class_obj=class_obj, is_active=True)
         exam_id = request.POST.get('exam')
 
         if not exam_id:
@@ -868,7 +873,7 @@ class BulkEditResultsView(LoginRequiredMixin, View):
         messages.success(request, f"Results updated successfully for {class_obj.name}")
         return redirect('bulk_edit_results', class_id=class_id)
 
-        
+
 def get_classes(request):
     academic_year_id = request.GET.get('academic_year_id')
     classes = Class.objects.filter(academic_year_id=academic_year_id, school=request.user.school)

@@ -73,7 +73,10 @@ class ClassForm(forms.ModelForm):
             self.fields['subjects'].queryset = Subject.objects.filter(school=self.school)
 
         if self.instance.pk:
-            self.fields['subjects'].initial = Subject.objects.filter(classes__class_obj=self.instance)
+            self.fields['subjects'].initial = Subject.objects.filter(
+                classes__class_obj=self.instance,
+                classes__is_active=True
+            )
 
     def save(self, commit=True):
         instance = super().save(commit=False)
@@ -83,12 +86,38 @@ class ClassForm(forms.ModelForm):
         return instance
 
     def save_subjects(self, instance):
-        # Clear existing subjects
-        ClassSubject.objects.filter(class_obj=instance).delete()
-        
-        # Add new subjects
-        for subject in self.cleaned_data['subjects']:
-            ClassSubject.objects.create(class_obj=instance, subject=subject)
+        if self.cleaned_data['subjects']:
+            current_subjects = set(ClassSubject.objects.filter(
+                class_obj=instance, 
+                is_active=True
+            ).values_list('subject_id', flat=True))
+            
+            new_subjects = set(self.cleaned_data['subjects'].values_list('id', flat=True))
+
+            # Deactivate subjects that are no longer selected
+            subjects_to_deactivate = current_subjects - new_subjects
+            ClassSubject.objects.filter(
+                class_obj=instance,
+                subject_id__in=subjects_to_deactivate
+            ).update(is_active=False)
+
+            # Add new subjects
+            subjects_to_add = new_subjects - current_subjects
+            for subject_id in subjects_to_add:
+                subject = Subject.objects.get(id=subject_id)
+                ClassSubject.objects.create(
+                    class_obj=instance,
+                    subject=subject,
+                    credit=subject.default_credit
+                )
+
+            # Reactivate subjects that were previously deactivated
+            subjects_to_reactivate = new_subjects & current_subjects
+            ClassSubject.objects.filter(
+                class_obj=instance,
+                subject_id__in=subjects_to_reactivate,
+                is_active=False
+            ).update(is_active=True)
 
 
 
