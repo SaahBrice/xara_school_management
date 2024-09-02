@@ -111,12 +111,19 @@ class Subject(models.Model):
     school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='subjects')
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=10)
-    default_credit = models.DecimalField(max_digits=3, decimal_places=1, default=1.0)
+    default_credit = models.DecimalField(max_digits=3, decimal_places=1, default=1.0, validators=[MinValueValidator(1.0), MaxValueValidator(20.0)])
     description = models.TextField(blank=True)
     subject_type = models.CharField(max_length=10, choices=SUBJECT_TYPES, default='MANDATORY')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def truncated_description(self):
+        return Truncator(self.description).chars(15)
 
     class Meta:
         unique_together = ('school', 'code')
+        ordering = ['name']
 
     def __str__(self):
         return f"{self.name} ({self.code})"
@@ -130,6 +137,14 @@ class Subject(models.Model):
         if exam:
             results = results.filter(exam=exam)
         return results.aggregate(Avg('mark'))['mark__avg'] or 0
+
+    def toggle_active(self):
+        self.is_active = not self.is_active
+        self.save()
+
+    def get_classes(self):
+        return self.classes.filter(class_obj__academic_year__is_current=True)
+
 
 class ClassSubject(models.Model):
     class_obj = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='subjects')
@@ -179,8 +194,7 @@ class Teacher(models.Model):
     qualifications = models.TextField(blank=True)
     date_joined = models.DateField(default=timezone.now)
 
-    def truncated_qualifications(self):
-        return Truncator(self.qualifications).chars(15)
+
 
     def __str__(self):
         return self.user.get_full_name()
@@ -234,6 +248,12 @@ class Student(models.Model):
     parent_address = models.TextField(blank=True)
     date_enrolled = models.DateField(default=timezone.now)
     picture = models.ImageField(upload_to='student_pictures/', blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+
+
+    def toggle_active(self):
+        self.is_active = not self.is_active
+        self.save()
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.matricula_code})"

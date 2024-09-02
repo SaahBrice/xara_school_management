@@ -1,0 +1,20 @@
+{% extends "users/dashboard_base.html" %}
+{% block title %}Delete Subject - {{ object.name }}{% endblock %}
+{% block page_title %}Delete Subject{% endblock %}
+{% block dashboard_content %}
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">Confirm Deletion</h5>
+        <p class="card-text">Are you sure you want to delete the subject "{{ object.name }}" ({{ object.code }})?</p>
+        <p class="card-text text-danger">This action cannot be undone and may affect associated data such as class assignments and student records. It is recommended to <span class="fw-bold">deactivate</span> the subject.</p>
+        
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Confirm Delete</button>
+            <a href="{% url 'subject_list' %}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+
+{% endblock dashboard_content %}

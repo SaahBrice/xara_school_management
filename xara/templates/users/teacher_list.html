@@ -53,15 +53,15 @@
                     </ul>
                 </td>
                 <td>
-                    <a href="{% url 'view_teacher' pk=teacher.pk %}" class="btn btn-sm btn-outline-primary">View</a>
-                    <a href="{% url 'edit_teacher' pk=teacher.pk %}" class="btn btn-sm btn-outline-secondary">Edit</a>
+                    <a href="{% url 'view_teacher' pk=teacher.pk %}" class="btn btn-sm btn-primary">View</a>
+                    <a href="{% url 'edit_teacher' pk=teacher.pk %}" class="btn btn-sm btn-secondary">Edit</a>
                     <form method="post" action="{% url 'toggle_teacher_active' pk=teacher.pk %}" style="display: inline;">
                         {% csrf_token %}
-                        <button type="submit" class="btn btn-sm {% if teacher.user.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}">
+                        <button type="submit" class="btn btn-sm {% if teacher.user.is_active %}btn-warning{% else %}btn-success{% endif %}">
                             {% if teacher.user.is_active %}Deactivate{% else %}Activate{% endif %}
                         </button>
                     </form>
-                    <a href="{% url 'delete_teacher' pk=teacher.pk %}" class="btn btn-sm btn-outline-danger">Delete</a>
+                    <a href="{% url 'delete_teacher' pk=teacher.pk %}" class="btn btn-sm btn-danger">Delete</a>
                 </td>
             </tr>
             {% empty %}

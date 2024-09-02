@@ -1,6 +1,6 @@
 from django import forms
 from django.contrib.auth import get_user_model
-from result_system.models import Student, StudentDocument, Teacher, TeacherSubject, Class, Subject, ClassSubject
+from result_system.models import AcademicYear, Student, StudentDocument, Teacher, TeacherSubject, Class, Subject, ClassSubject
 
 User = get_user_model()
 
@@ -120,3 +120,80 @@ class TeacherForm(forms.ModelForm):
         if commit:
             user.save()
         return user
+
+
+class AcademicYearForm(forms.ModelForm):
+    class Meta:
+        model = AcademicYear
+        fields = ['year', 'start_date', 'end_date', 'is_current']
+        widgets = {
+            'start_date': forms.DateInput(attrs={'type': 'date'}),
+            'end_date': forms.DateInput(attrs={'type': 'date'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        self.school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start_date = cleaned_data.get('start_date')
+        end_date = cleaned_data.get('end_date')
+        is_current = cleaned_data.get('is_current')
+
+        if start_date and end_date and start_date >= end_date:
+            raise forms.ValidationError("End date must be after start date.")
+
+        if is_current:
+            existing_current = AcademicYear.objects.filter(school=self.school, is_current=True).exclude(pk=self.instance.pk)
+            if existing_current.exists():
+                raise forms.ValidationError("Another academic year is already set as current.")
+
+        return cleaned_data
+
+
+
+
+
+
+class SubjectForm(forms.ModelForm):
+    class Meta:
+        model = Subject
+        fields = ['name', 'code', 'default_credit', 'description', 'subject_type']
+
+    def __init__(self, *args, **kwargs):
+        self.school = kwargs.pop('school', None)
+        super().__init__(*args, **kwargs)
+
+    def clean_code(self):
+        code = self.cleaned_data['code']
+        if Subject.objects.filter(school=self.school, code=code).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError("A subject with this code already exists in your school.")
+        return code
+
+class AssignSubjectForm(forms.Form):
+    classes = forms.ModelMultipleChoiceField(
+        queryset=Class.objects.none(),
+        widget=forms.CheckboxSelectMultiple,
+        required=False
+    )
+    credit = forms.DecimalField(
+        max_digits=3, 
+        decimal_places=1, 
+        
+    )
+
+    def __init__(self, *args, **kwargs):
+        self.school = kwargs.pop('school', None)
+        self.subject = kwargs.pop('subject', None)
+        super().__init__(*args, **kwargs)
+        
+        if self.school:
+            self.fields['classes'].queryset = Class.objects.filter(
+                school=self.school,
+                academic_year__is_current=True
+            )
+        
+        if self.subject:
+            self.fields['credit'].initial = self.subject.default_credit
+            self.initial['classes'] = self.subject.get_classes().values_list('class_obj__id', flat=True)

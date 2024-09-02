@@ -88,12 +88,12 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#">
+                            <a class="nav-link {% if 'academic' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'academic_year_list' %}">
                                 <i class="bi bi-calendar-event"></i> Academic Years
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link" href="#">
+                            <a class="nav-link {% if 'subject' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'subject_list' %}">
                                 <i class="bi bi-book"></i> Subjects
                             </a>
                         </li>

@@ -4,10 +4,10 @@ from django.views.generic import TemplateView, RedirectView, FormView
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.shortcuts import redirect, get_object_or_404
-from result_system.models import ClassSubject, StudentSubject, Subject, Teacher, Class, Student, TeacherSubject, User
+from result_system.models import AcademicYear, ClassSubject, StudentSubject, Subject, Teacher, Class, Student, TeacherSubject, User
 from django.views.generic import ListView
 from django.views.generic import DetailView, ListView, CreateView, UpdateView, DeleteView
-from .forms import ClassForm, StudentDocumentFormSet, StudentForm, StudentSubjectForm, TeacherForm
+from .forms import AcademicYearForm, AssignSubjectForm, ClassForm, StudentDocumentFormSet, StudentForm, StudentSubjectForm, SubjectForm, TeacherForm
 from .mixins import SecretaryRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Prefetch
@@ -320,6 +320,11 @@ class StudentListView(SecretaryRequiredMixin, ListView):
             )
         return queryset.order_by('last_name', 'first_name')
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['total_students'] = self.get_queryset().count()
+        return context
+
 class StudentCreateView(SecretaryRequiredMixin, CreateView):
     model = Student
     form_class = StudentForm
@@ -446,3 +451,163 @@ class ManageStudentSubjectsView(SecretaryRequiredMixin, FormView):
 
         messages.success(self.request, "Student subjects updated successfully.")
         return super().form_valid(form)
+
+
+class AcademicYearListView(SecretaryRequiredMixin, ListView):
+    model = AcademicYear
+    template_name = 'users/academic_year_list.html'
+    context_object_name = 'academic_years'
+
+    def get_queryset(self):
+        return AcademicYear.objects.filter(school=self.request.user.school).order_by('-year')
+
+class AcademicYearCreateView(SecretaryRequiredMixin, CreateView):
+    model = AcademicYear
+    form_class = AcademicYearForm
+    template_name = 'users/academic_year_form.html'
+    success_url = reverse_lazy('academic_year_list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['school'] = self.request.user.school
+        return kwargs
+
+    def form_valid(self, form):
+        form.instance.school = self.request.user.school
+        messages.success(self.request, 'Academic Year created successfully.')
+        return super().form_valid(form)
+
+class AcademicYearUpdateView(SecretaryRequiredMixin, UpdateView):
+    model = AcademicYear
+    form_class = AcademicYearForm
+    template_name = 'users/academic_year_form.html'
+    success_url = reverse_lazy('academic_year_list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['school'] = self.request.user.school
+        return kwargs
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Academic Year updated successfully.')
+        return super().form_valid(form)
+
+class AcademicYearDeleteView(SecretaryRequiredMixin, DeleteView):
+    model = AcademicYear
+    template_name = 'users/academic_year_confirm_delete.html'
+    success_url = reverse_lazy('academic_year_list')
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, 'Academic Year deleted successfully.')
+        return super().delete(request, *args, **kwargs)
+
+class SetCurrentAcademicYearView(SecretaryRequiredMixin, View):
+    @transaction.atomic
+    def post(self, request, *args, **kwargs):
+        academic_year = get_object_or_404(AcademicYear, pk=kwargs['pk'], school=request.user.school)
+        AcademicYear.objects.filter(school=request.user.school).update(is_current=False)
+        academic_year.is_current = True
+        academic_year.save()
+        messages.success(request, f'{academic_year.year} set as the current academic year.')
+        return redirect('academic_year_list')
+
+
+class ToggleStudentActiveView(SecretaryRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        student = get_object_or_404(Student, pk=kwargs['pk'], school=request.user.school)
+        student.toggle_active()
+        status = "activated" if student.is_active else "deactivated"
+        messages.success(request, f"Student {student.get_full_name()} has been {status}.")
+        return redirect('student_list')
+
+
+
+
+
+class SubjectListView(SecretaryRequiredMixin, ListView):
+    model = Subject
+    template_name = 'users/subject_list.html'
+    context_object_name = 'subjects'
+    paginate_by = 20
+
+    def get_queryset(self):
+        return Subject.objects.filter(school=self.request.user.school)
+
+class SubjectCreateView(SecretaryRequiredMixin, CreateView):
+    model = Subject
+    form_class = SubjectForm
+    template_name = 'users/subject_form.html'
+    success_url = reverse_lazy('subject_list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['school'] = self.request.user.school
+        return kwargs
+
+    def form_valid(self, form):
+        form.instance.school = self.request.user.school
+        messages.success(self.request, 'Subject created successfully.')
+        return super().form_valid(form)
+
+class SubjectUpdateView(SecretaryRequiredMixin, UpdateView):
+    model = Subject
+    form_class = SubjectForm
+    template_name = 'users/subject_form.html'
+    success_url = reverse_lazy('subject_list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['school'] = self.request.user.school
+        return kwargs
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Subject updated successfully.')
+        return super().form_valid(form)
+
+class SubjectDeleteView(SecretaryRequiredMixin, DeleteView):
+    model = Subject
+    template_name = 'users/subject_confirm_delete.html'
+    success_url = reverse_lazy('subject_list')
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, 'Subject deleted successfully.')
+        return super().delete(request, *args, **kwargs)
+
+class AssignSubjectView(SecretaryRequiredMixin, FormView):
+    form_class = AssignSubjectForm
+    template_name = 'users/assign_subject.html'
+    success_url = reverse_lazy('subject_list')
+
+    def get_form_kwargs(self):
+        kwargs = super().get_form_kwargs()
+        kwargs['school'] = self.request.user.school
+        kwargs['subject'] = get_object_or_404(Subject, pk=self.kwargs['pk'], school=self.request.user.school)
+        return kwargs
+
+    def form_valid(self, form):
+        subject = get_object_or_404(Subject, pk=self.kwargs['pk'], school=self.request.user.school)
+        selected_classes = form.cleaned_data['classes']
+        credit = form.cleaned_data['credit']
+
+        with transaction.atomic():
+            # Remove subject from unselected classes
+            ClassSubject.objects.filter(subject=subject).exclude(class_obj__in=selected_classes).delete()
+
+            # Add or update subject for selected classes
+            for class_obj in selected_classes:
+                ClassSubject.objects.update_or_create(
+                    subject=subject,
+                    class_obj=class_obj,
+                    defaults={'credit': credit}
+                )
+
+        messages.success(self.request, f'{subject.name} has been assigned to the selected classes.')
+        return super().form_valid(form)
+
+class ToggleSubjectActiveView(SecretaryRequiredMixin, View):
+    def post(self, request, *args, **kwargs):
+        subject = get_object_or_404(Subject, pk=kwargs['pk'], school=request.user.school)
+        subject.toggle_active()
+        status = "activated" if subject.is_active else "deactivated"
+        messages.success(request, f"Subject {subject.name} has been {status}.")
+        return redirect('subject_list')

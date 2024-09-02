@@ -1,0 +1,50 @@
+{% extends "users/dashboard_base.html" %}
+{% block title %}Academic Years - Xara School Management System{% endblock %}
+{% block page_title %}Academic Years{% endblock %}
+{% block dashboard_content %}
+
+<div class="row mb-3">
+    <div class="col-12">
+        <a href="{% url 'academic_year_add' %}" class="btn btn-primary">Add New Academic Year</a>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Year</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Current</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for academic_year in academic_years %}
+            <tr>
+                <td>{{ academic_year.year }}</td>
+                <td>{{ academic_year.start_date }}</td>
+                <td>{{ academic_year.end_date }}</td>
+                <td>{% if academic_year.is_current %}Yes{% else %}No{% endif %}</td>
+                <td>
+                    <a href="{% url 'academic_year_edit' academic_year.pk %}" class="btn btn-sm btn-secondary">Edit</a>
+                    <a href="{% url 'academic_year_delete' academic_year.pk %}" class="btn btn-sm btn-danger">Delete</a>
+                    {% if not academic_year.is_current %}
+                    <form method="post" action="{% url 'set_current_academic_year' academic_year.pk %}" style="display: inline;">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-primary">Set Current</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5">No academic years found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock dashboard_content %}
