@@ -4,10 +4,10 @@ from django.views.generic import TemplateView, RedirectView, FormView
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.shortcuts import redirect, get_object_or_404
-from result_system.models import AcademicYear, ClassSubject, StudentSubject, Subject, Teacher, Class, Student, TeacherSubject, User
+from result_system.models import AcademicYear, ClassSubject, StudentSubject, Subject, SystemSettings, Teacher, Class, Student, TeacherSubject, User
 from django.views.generic import ListView
 from django.views.generic import DetailView, ListView, CreateView, UpdateView, DeleteView
-from .forms import AcademicYearForm, AssignSubjectForm, ClassForm, StudentDocumentFormSet, StudentForm, StudentSubjectForm, SubjectForm, TeacherForm
+from .forms import AcademicYearForm, AssignSubjectForm, ClassForm, StudentDocumentFormSet, StudentForm, StudentSubjectForm, SubjectForm, SystemSettingsForm, TeacherForm
 from .mixins import SecretaryRequiredMixin
 from django.core.exceptions import PermissionDenied
 from django.db.models import Prefetch
@@ -611,3 +611,36 @@ class ToggleSubjectActiveView(SecretaryRequiredMixin, View):
         status = "activated" if subject.is_active else "deactivated"
         messages.success(request, f"Subject {subject.name} has been {status}.")
         return redirect('subject_list')
+
+
+
+
+class SystemSettingsView(SecretaryRequiredMixin, FormView):
+    template_name = 'users/system_settings.html'
+    form_class = SystemSettingsForm
+    success_url = reverse_lazy('system_settings')
+
+    def get_form(self):
+        try:
+            instance = SystemSettings.objects.get(school=self.request.user.school)
+        except SystemSettings.DoesNotExist:
+            instance = None
+        
+        if self.request.method == 'POST':
+            return self.form_class(self.request.POST, instance=instance)
+        else:
+            return self.form_class(instance=instance)
+
+    def form_valid(self, form):
+        try:
+            form.instance.school = self.request.user.school
+            form.save()
+            messages.success(self.request, 'System settings updated successfully.')
+        except json.JSONDecodeError:
+            messages.error(self.request, 'Invalid JSON format in grading system.')
+            return self.form_invalid(form)
+        return super().form_valid(form)
+
+    def form_invalid(self, form):
+        messages.error(self.request, 'There was an error updating the system settings. Please check the form and try again.')
+        return super().form_invalid(form)

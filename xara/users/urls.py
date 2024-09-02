@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     AcademicYearCreateView, AcademicYearDeleteView, AcademicYearListView, AcademicYearUpdateView, AddTeacherView, AssignSubjectView, ClassCreateView, ClassDeleteView, ClassListView, ClassUpdateView, CustomLoginView, CustomLogoutView, DashboardView, DeleteTeacherView, EditTeacherView,
-    GenericDashboardView, ManageStudentSubjectsView, SetCurrentAcademicYearView, StudentDeleteView, SubjectCreateView, SubjectDeleteView, SubjectListView, SubjectUpdateView, TeacherDashboardView, SecretaryDashboardView, TeacherDetailView,
+    GenericDashboardView, ManageStudentSubjectsView, SetCurrentAcademicYearView, StudentDeleteView, SubjectCreateView, SubjectDeleteView, SubjectListView, SubjectUpdateView, SystemSettingsView, TeacherDashboardView, SecretaryDashboardView, TeacherDetailView,
     TeacherListView, ToggleStudentActiveView, ToggleSubjectActiveView, ToggleTeacherActiveView, StudentCreateView, StudentDetailView, StudentUpdateView, StudentListView
 )
 
@@ -47,4 +47,6 @@ urlpatterns = [
     path('subjects/<int:pk>/delete/', SubjectDeleteView.as_view(), name='subject_delete'),
     path('subjects/<int:pk>/assign/', AssignSubjectView.as_view(), name='subject_assign'),
     path('subjects/<int:pk>/toggle-active/', ToggleSubjectActiveView.as_view(), name='toggle_subject_active'),
+
+    path('settings/', SystemSettingsView.as_view(), name='system_settings'),
 ]

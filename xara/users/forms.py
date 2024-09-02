@@ -1,6 +1,7 @@
+import json
 from django import forms
 from django.contrib.auth import get_user_model
-from result_system.models import AcademicYear, Student, StudentDocument, Teacher, TeacherSubject, Class, Subject, ClassSubject
+from result_system.models import AcademicYear, Student, StudentDocument, SystemSettings, Teacher, TeacherSubject, Class, Subject, ClassSubject
 
 User = get_user_model()
 
@@ -197,3 +198,26 @@ class AssignSubjectForm(forms.Form):
         if self.subject:
             self.fields['credit'].initial = self.subject.default_credit
             self.initial['classes'] = self.subject.get_classes().values_list('class_obj__id', flat=True)
+
+
+
+class SystemSettingsForm(forms.ModelForm):
+    class Meta:
+        model = SystemSettings
+        fields = ['school_initials', 'academic_year_format', 'max_students_per_class', 'grading_system', 'default_pass_mark']
+        widgets = {
+            'grading_system': forms.Textarea(attrs={'rows': 5}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk and isinstance(self.instance.grading_system, dict):
+            self.initial['grading_system'] = json.dumps(self.instance.grading_system, indent=2)
+
+    def clean_grading_system(self):
+        grading_system = self.cleaned_data['grading_system']
+        try:
+            # Parse the JSON string into a Python dict
+            return json.loads(grading_system)
+        except json.JSONDecodeError:
+            raise forms.ValidationError("Invalid JSON format for grading system.")
