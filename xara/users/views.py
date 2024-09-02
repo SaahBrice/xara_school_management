@@ -1,9 +1,10 @@
 from django.contrib.auth.views import LoginView, LogoutView
 from django.contrib.auth.mixins import LoginRequiredMixin, UserPassesTestMixin
+from django.http import JsonResponse
 from django.views.generic import TemplateView, RedirectView, FormView
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.shortcuts import redirect, get_object_or_404
+from django.shortcuts import redirect, get_object_or_404, render
 from result_system.models import AcademicYear, ClassSubject, Exam, GeneralExam, Result, StudentSubject, Subject, SystemSettings, Teacher, Class, Student, TeacherSubject, User
 from django.views.generic import ListView
 from django.views.generic import DetailView, ListView, CreateView, UpdateView, DeleteView
@@ -756,3 +757,124 @@ class GradeCalculationView(TemplateView):
             class_subject = form.cleaned_data['class_subject']
             return redirect(reverse('grade_calculation') + f'?exam_id={exam.id}&class_subject_id={class_subject.id}')
         return self.get(request, *args, **kwargs)
+
+
+
+
+
+class ManageResultsView(LoginRequiredMixin, View):
+    def get(self, request):
+        academic_years = AcademicYear.objects.filter(school=request.user.school)
+        context = {'academic_years': academic_years}
+        return render(request, 'users/manage_results.html', context)
+
+    def post(self, request):
+        academic_year_id = request.POST.get('academic_year')
+        class_id = request.POST.get('class')
+        student_id = request.POST.get('student')
+
+        if student_id == 'all':
+            return redirect('bulk_edit_results', class_id=class_id)
+        else:
+            return redirect('edit_student_result', student_id=student_id)
+
+
+
+
+class EditStudentResultView(LoginRequiredMixin, View):
+    def get(self, request, student_id):
+        student = get_object_or_404(Student, id=student_id, school=request.user.school)
+        class_subjects = ClassSubject.objects.filter(class_obj=student.current_class)
+        exams = Exam.objects.filter(school=request.user.school, academic_year=student.current_class.academic_year)
+        results = Result.objects.filter(student=student, class_subject__in=class_subjects)
+
+        context = {
+            'student': student,
+            'class_subjects': class_subjects,
+            'exams': exams,
+            'results': {(result.class_subject_id, result.exam_id): result for result in results}
+        }
+        return render(request, 'users/edit_student_result.html', context)
+
+    def post(self, request, student_id):
+        student = get_object_or_404(Student, id=student_id, school=request.user.school)
+        class_subjects = ClassSubject.objects.filter(class_obj=student.current_class)
+        exam_id = request.POST.get('exam')
+        
+        if not exam_id:
+            messages.error(request, "Please select an exam.")
+            return redirect('edit_student_result', student_id=student_id)
+
+        exam = get_object_or_404(Exam, id=exam_id, school=request.user.school)
+
+        with transaction.atomic():
+            for class_subject in class_subjects:
+                mark = request.POST.get(f'mark_{class_subject.id}')
+                if mark:
+                    Result.objects.update_or_create(
+                        student=student,
+                        class_subject=class_subject,
+                        exam=exam,
+                        defaults={'mark': mark, 'created_by': request.user}
+                    )
+
+        messages.success(request, f"Results updated successfully for {student.get_full_name()}")
+        return redirect('edit_student_result', student_id=student_id)
+
+
+
+
+class BulkEditResultsView(LoginRequiredMixin, View):
+    def get(self, request, class_id):
+        class_obj = get_object_or_404(Class, id=class_id, school=request.user.school)
+        students = Student.objects.filter(current_class=class_obj)
+        class_subjects = ClassSubject.objects.filter(class_obj=class_obj)
+        exams = Exam.objects.filter(school=request.user.school, academic_year=class_obj.academic_year)
+        results = Result.objects.filter(student__in=students, class_subject__in=class_subjects)
+
+        context = {
+            'class': class_obj,
+            'students': students,
+            'class_subjects': class_subjects,
+            'exams': exams,
+            'results': {(result.student_id, result.class_subject_id, result.exam_id): result for result in results}
+        }
+        return render(request, 'users/bulk_edit_results.html', context)
+
+    def post(self, request, class_id):
+        class_obj = get_object_or_404(Class, id=class_id, school=request.user.school)
+        students = Student.objects.filter(current_class=class_obj)
+        class_subjects = ClassSubject.objects.filter(class_obj=class_obj)
+        exam_id = request.POST.get('exam')
+
+        if not exam_id:
+            messages.error(request, "Please select an exam.")
+            return redirect('bulk_edit_results', class_id=class_id)
+
+        exam = get_object_or_404(Exam, id=exam_id, school=request.user.school)
+
+        with transaction.atomic():
+            for student in students:
+                for class_subject in class_subjects:
+                    mark = request.POST.get(f'mark_{student.id}_{class_subject.id}')
+                    if mark:
+                        Result.objects.update_or_create(
+                            student=student,
+                            class_subject=class_subject,
+                            exam=exam,
+                            defaults={'mark': mark, 'created_by': request.user}
+                        )
+
+        messages.success(request, f"Results updated successfully for {class_obj.name}")
+        return redirect('bulk_edit_results', class_id=class_id)
+
+        
+def get_classes(request):
+    academic_year_id = request.GET.get('academic_year_id')
+    classes = Class.objects.filter(academic_year_id=academic_year_id, school=request.user.school)
+    return JsonResponse(list(classes.values('id', 'name')), safe=False)
+
+def get_students(request):
+    class_id = request.GET.get('class_id')
+    students = Student.objects.filter(current_class_id=class_id, school=request.user.school)
+    return JsonResponse(list(students.values('id', 'first_name', 'last_name')), safe=False)
