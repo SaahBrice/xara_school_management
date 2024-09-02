@@ -4,18 +4,19 @@ from django.views.generic import TemplateView, RedirectView, FormView
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.shortcuts import redirect, get_object_or_404
-from result_system.models import AcademicYear, ClassSubject, StudentSubject, Subject, SystemSettings, Teacher, Class, Student, TeacherSubject, User
+from result_system.models import AcademicYear, ClassSubject, Exam, GeneralExam, Result, StudentSubject, Subject, SystemSettings, Teacher, Class, Student, TeacherSubject, User
 from django.views.generic import ListView
 from django.views.generic import DetailView, ListView, CreateView, UpdateView, DeleteView
-from .forms import AcademicYearForm, AssignSubjectForm, ClassForm, StudentDocumentFormSet, StudentForm, StudentSubjectForm, SubjectForm, SystemSettingsForm, TeacherForm
+from .forms import AcademicYearForm, AssignSubjectForm, ClassForm, ExamForm, ExamSelectionForm, GeneralExamForm, StudentDocumentFormSet, StudentForm, StudentSubjectForm, SubjectForm, SystemSettingsForm, TeacherForm
 from .mixins import SecretaryRequiredMixin
-from django.core.exceptions import PermissionDenied
+
 from django.db.models import Prefetch
 from django.db import transaction
 import json
 from django.urls import reverse
 from django.views import View
 from django.db.models import Q
+
 
 
 class CustomLoginView(LoginView):
@@ -644,3 +645,114 @@ class SystemSettingsView(SecretaryRequiredMixin, FormView):
     def form_invalid(self, form):
         messages.error(self.request, 'There was an error updating the system settings. Please check the form and try again.')
         return super().form_invalid(form)
+
+
+
+
+class ExamListView(ListView):
+    model = Exam
+    template_name = 'users/exam_list.html'
+    context_object_name = 'exams'
+
+class ExamCreateView(CreateView):
+    model = Exam
+    form_class = ExamForm
+    template_name = 'users/exam_form.html'
+    success_url = reverse_lazy('exam_list')
+
+    def form_valid(self, form):
+        form.instance.school = self.request.user.school
+        messages.success(self.request, 'Exam created successfully.')
+        return super().form_valid(form)
+
+class ExamUpdateView(UpdateView):
+    model = Exam
+    form_class = ExamForm
+    template_name = 'users/exam_form.html'
+    success_url = reverse_lazy('exam_list')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Exam updated successfully.')
+        return super().form_valid(form)
+
+class ExamDeleteView(DeleteView):
+    model = Exam
+    template_name = 'users/exam_confirm_delete.html'
+    success_url = reverse_lazy('exam_list')
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, 'Exam deleted successfully.')
+        return super().delete(request, *args, **kwargs)
+
+class GeneralExamListView(ListView):
+    model = GeneralExam
+    template_name = 'users/general_exam_list.html'
+    context_object_name = 'general_exams'
+
+class GeneralExamCreateView(CreateView):
+    model = GeneralExam
+    form_class = GeneralExamForm
+    template_name = 'users/general_exam_form.html'
+    success_url = reverse_lazy('general_exam_list')
+
+    def form_valid(self, form):
+        form.instance.school = self.request.user.school
+        messages.success(self.request, 'General Exam created successfully.')
+        return super().form_valid(form)
+
+class GeneralExamUpdateView(UpdateView):
+    model = GeneralExam
+    form_class = GeneralExamForm
+    template_name = 'users/general_exam_form.html'
+    success_url = reverse_lazy('general_exam_list')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'General Exam updated successfully.')
+        return super().form_valid(form)
+
+class GeneralExamDeleteView(DeleteView):
+    model = GeneralExam
+    template_name = 'users/general_exam_confirm_delete.html'
+    success_url = reverse_lazy('general_exam_list')
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, 'General Exam deleted successfully.')
+        return super().delete(request, *args, **kwargs)
+
+
+
+class GradeCalculationView(TemplateView):
+    template_name = 'users/grade_calculation.html'
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        exam_id = self.request.GET.get('exam_id')
+        class_subject_id = self.request.GET.get('class_subject_id')
+        
+        if exam_id and class_subject_id:
+            exam = get_object_or_404(Exam, pk=exam_id)
+            class_subject = get_object_or_404(ClassSubject, pk=class_subject_id)
+            results = Result.objects.filter(exam=exam, class_subject=class_subject)
+            
+            graded_results = []
+            for result in results:
+                graded_results.append({
+                    'student': result.student,
+                    'mark': result.mark,
+                    'grade': result.calculate_grade()
+                })
+            
+            context['exam'] = exam
+            context['class_subject'] = class_subject
+            context['graded_results'] = graded_results
+        
+        context['form'] = ExamSelectionForm()
+        return context
+
+    def post(self, request, *args, **kwargs):
+        form = ExamSelectionForm(request.POST)
+        if form.is_valid():
+            exam = form.cleaned_data['exam']
+            class_subject = form.cleaned_data['class_subject']
+            return redirect(reverse('grade_calculation') + f'?exam_id={exam.id}&class_subject_id={class_subject.id}')
+        return self.get(request, *args, **kwargs)

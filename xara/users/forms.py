@@ -1,7 +1,9 @@
 import json
 from django import forms
 from django.contrib.auth import get_user_model
-from result_system.models import AcademicYear, Student, StudentDocument, SystemSettings, Teacher, TeacherSubject, Class, Subject, ClassSubject
+from result_system.models import AcademicYear, Exam, GeneralExam, Student, StudentDocument, SystemSettings, Teacher, Class, Subject, ClassSubject
+
+
 
 User = get_user_model()
 
@@ -221,3 +223,22 @@ class SystemSettingsForm(forms.ModelForm):
             return json.loads(grading_system)
         except json.JSONDecodeError:
             raise forms.ValidationError("Invalid JSON format for grading system.")
+
+
+
+class ExamForm(forms.ModelForm):
+    class Meta:
+        model = Exam
+        fields = ['name', 'academic_year', 'start_date', 'end_date', 'is_active', 'max_score']
+
+class GeneralExamForm(forms.ModelForm):
+    class Meta:
+        model = GeneralExam
+        fields = ['name', 'academic_year', 'exams', 'start_date', 'end_date']
+
+
+
+class ExamSelectionForm(forms.Form):
+    exam = forms.ModelChoiceField(queryset=Exam.objects.all())
+    class_subject = forms.ModelChoiceField(queryset=ClassSubject.objects.all())
+

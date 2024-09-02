@@ -102,6 +102,16 @@
                                 <i class="bi bi-gear"></i> Settings
                             </a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'exam' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'exam_list' %}">
+                                <i class="bi bi-book-half"></i> Single Exams
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'general' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'general_exam_list' %}">
+                                <i class="bi bi-box-seam"></i> General Exams
+                            </a>
+                        </li>
                     </ul>
                 </div>
             </nav>

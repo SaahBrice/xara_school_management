@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
-    AcademicYearCreateView, AcademicYearDeleteView, AcademicYearListView, AcademicYearUpdateView, AddTeacherView, AssignSubjectView, ClassCreateView, ClassDeleteView, ClassListView, ClassUpdateView, CustomLoginView, CustomLogoutView, DashboardView, DeleteTeacherView, EditTeacherView,
-    GenericDashboardView, ManageStudentSubjectsView, SetCurrentAcademicYearView, StudentDeleteView, SubjectCreateView, SubjectDeleteView, SubjectListView, SubjectUpdateView, SystemSettingsView, TeacherDashboardView, SecretaryDashboardView, TeacherDetailView,
+    AcademicYearCreateView, AcademicYearDeleteView, AcademicYearListView, AcademicYearUpdateView, AddTeacherView, AssignSubjectView, ClassCreateView, ClassDeleteView, ClassListView, ClassUpdateView, CustomLoginView, CustomLogoutView, DashboardView, DeleteTeacherView, EditTeacherView, ExamCreateView, ExamDeleteView, ExamListView, ExamUpdateView, GeneralExamCreateView, GeneralExamDeleteView, GeneralExamListView, GeneralExamUpdateView,
+    GenericDashboardView, GradeCalculationView, ManageStudentSubjectsView, SetCurrentAcademicYearView, StudentDeleteView, SubjectCreateView, SubjectDeleteView, SubjectListView, SubjectUpdateView, SystemSettingsView, TeacherDashboardView, SecretaryDashboardView, TeacherDetailView,
     TeacherListView, ToggleStudentActiveView, ToggleSubjectActiveView, ToggleTeacherActiveView, StudentCreateView, StudentDetailView, StudentUpdateView, StudentListView
 )
 
@@ -49,4 +49,17 @@ urlpatterns = [
     path('subjects/<int:pk>/toggle-active/', ToggleSubjectActiveView.as_view(), name='toggle_subject_active'),
 
     path('settings/', SystemSettingsView.as_view(), name='system_settings'),
+
+
+    path('exams/', ExamListView.as_view(), name='exam_list'),
+    path('exams/create/', ExamCreateView.as_view(), name='exam_create'),
+    path('exams/<int:pk>/update/', ExamUpdateView.as_view(), name='exam_update'),
+    path('exams/<int:pk>/delete/', ExamDeleteView.as_view(), name='exam_delete'),
+    path('general-exams/', GeneralExamListView.as_view(), name='general_exam_list'),
+    path('general-exams/create/', GeneralExamCreateView.as_view(), name='general_exam_create'),
+    path('general-exams/<int:pk>/update/', GeneralExamUpdateView.as_view(), name='general_exam_update'),
+    path('general-exams/<int:pk>/delete/', GeneralExamDeleteView.as_view(), name='general_exam_delete'),
+
+    path('grades/calculate/', GradeCalculationView.as_view(), name='grade_calculation'),
+
 ]

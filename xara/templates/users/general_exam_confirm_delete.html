@@ -1,0 +1,18 @@
+{% extends "users/dashboard_base.html" %}
+{% block title %}Delete General Exam{% endblock %}
+{% block page_title %}Delete General Exam{% endblock %}
+{% block dashboard_content %}
+
+<div class="card">
+    <div class="card-body">
+        <h5 class="card-title">Confirm Deletion</h5>
+        <p>Are you sure you want to delete the general exam "{{ object.name }}"?</p>
+        <form method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Confirm Delete</button>
+            <a href="{% url 'general_exam_list' %}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+
+{% endblock dashboard_content %}

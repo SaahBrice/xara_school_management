@@ -434,6 +434,19 @@ class Result(models.Model):
         self.full_clean()
         super().save(*args, **kwargs)
 
+
+    def calculate_grade(self):
+        grading_system = self.student.school.settings.grading_system
+        for grade, range_info in grading_system.items():
+            if range_info['min'] <= self.mark <= range_info['max']:
+                return grade
+        raise ValidationError("The mark does not fall within any defined grade range.")
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+
 class Attendance(models.Model):
     student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='attendances')
     class_subject = models.ForeignKey(ClassSubject, on_delete=models.CASCADE, related_name='attendances')

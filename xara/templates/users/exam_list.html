@@ -1,0 +1,46 @@
+{% extends "users/dashboard_base.html" %}
+{% block title %}Exams - Xara School Management System{% endblock %}
+{% block page_title %}Exams{% endblock %}
+{% block dashboard_content %}
+
+<div class="row mb-3">
+    <div class="col-12">
+        <a href="{% url 'exam_create' %}" class="btn btn-primary">Add New Exam</a>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Academic Year</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Is Active</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for exam in exams %}
+            <tr>
+                <td>{{ exam.name }}</td>
+                <td>{{ exam.academic_year }}</td>
+                <td>{{ exam.start_date }}</td>
+                <td>{{ exam.end_date }}</td>
+                <td>{% if exam.is_active %}Yes{% else %}No{% endif %}</td>
+                <td>
+                    <a href="{% url 'exam_update' exam.pk %}" class="btn btn-sm btn-secondary">Edit</a>
+                    <a href="{% url 'exam_delete' exam.pk %}" class="btn btn-sm btn-danger">Delete</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6">No exams found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock dashboard_content %}
