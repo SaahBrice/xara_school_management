@@ -5,11 +5,11 @@
 {% block page_title %}Students{% endblock %}
 
 {% block dashboard_content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Students</h2>
-    <a href="{% url 'student_add' %}" class="btn btn-primary">Add New Student</a>
+<div class="row mb-3">
+    <div class="col-12">
+        <a href="{% url 'student_add' %}" class="btn btn-primary">Add New Students</a>
+    </div>
 </div>
-
 <form class="mb-4">
     <div class="input-group">
         <input type="text" name="search" class="form-control" placeholder="Search students..." value="{{ request.GET.search }}">
