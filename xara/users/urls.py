@@ -1,8 +1,8 @@
 from django.urls import path
 from .views import (
-    AcademicYearCreateView, AcademicYearDeleteView, AcademicYearListView, AcademicYearUpdateView, AddTeacherView, AssignSubjectView, BulkEditResultsView, ClassCreateView, ClassDeleteView, ClassListView, ClassUpdateView, CustomLoginView, CustomLogoutView, DashboardView, DeleteTeacherView, EditStudentResultView, EditTeacherView, ExamCreateView, ExamDeleteView, ExamListView, ExamUpdateView, GeneralExamCreateView, GeneralExamDeleteView, GeneralExamListView, GeneralExamUpdateView,
-    GenericDashboardView, GradeCalculationView, ManageResultsView, ManageStudentSubjectsView, SetCurrentAcademicYearView, StudentDeleteView, SubjectCreateView, SubjectDeleteView, SubjectListView, SubjectUpdateView, SystemSettingsView, TeacherDashboardView, SecretaryDashboardView, TeacherDetailView,
-    TeacherListView, ToggleStudentActiveView, ToggleSubjectActiveView, ToggleTeacherActiveView, StudentCreateView, StudentDetailView, StudentUpdateView, StudentListView, get_classes, get_students
+    AcademicYearCreateView, AcademicYearDeleteView, AcademicYearListView, AcademicYearUpdateView, AddTeacherView, AssignSubjectView, ClassCreateView, ClassDeleteView, ClassListView, ClassUpdateView, CustomLoginView, CustomLogoutView, DashboardView, DeleteTeacherView, EditTeacherView, ExamCreateView, ExamDeleteView, ExamListView, ExamUpdateView, GeneralExamCreateView, GeneralExamDeleteView, GeneralExamListView, GeneralExamUpdateView,
+    GenericDashboardView, ManageResultsView, ManageStudentSubjectsView, SetCurrentAcademicYearView, StudentDeleteView, SubjectCreateView, SubjectDeleteView, SubjectListView, SubjectUpdateView, SystemSettingsView, TeacherDashboardView, SecretaryDashboardView, TeacherDetailView,
+    TeacherListView, ToggleStudentActiveView, ToggleSubjectActiveView, ToggleTeacherActiveView, StudentCreateView, StudentDetailView, StudentUpdateView, StudentListView, get_classes, get_exams, get_results, save_grade,
 )
 
 urlpatterns = [
@@ -60,12 +60,13 @@ urlpatterns = [
     path('general-exams/<int:pk>/update/', GeneralExamUpdateView.as_view(), name='general_exam_update'),
     path('general-exams/<int:pk>/delete/', GeneralExamDeleteView.as_view(), name='general_exam_delete'),
 
-    path('grades/calculate/', GradeCalculationView.as_view(), name='grade_calculation'),
 
     path('manage-results/', ManageResultsView.as_view(), name='manage_results'),
-    path('edit-student-result/<int:student_id>/', EditStudentResultView.as_view(), name='edit_student_result'),
-    path('bulk-edit-results/<int:class_id>/', BulkEditResultsView.as_view(), name='bulk_edit_results'),
-    path('get-classes/', get_classes, name='get_classes'),
-    path('get-students/', get_students, name='get_students'),
+    path('api/classes/', get_classes, name='api_classes'),
+    path('api/exams/', get_exams, name='api_exams'),
+    path('api/results/', get_results, name='api_results'),
+    path('api/save-grade/', save_grade, name='api_save_grade'),
+
+
 
 ]

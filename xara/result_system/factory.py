@@ -3,11 +3,21 @@ import factory
 from factory.django import DjangoModelFactory
 from factory.fuzzy import FuzzyChoice, FuzzyDecimal
 from django.utils import timezone
+import factory.fuzzy
 from .models import (
     School, SystemSettings, AcademicYear, Class, Subject, ClassSubject,
     User, Teacher, TeacherSubject, Student, StudentDocument, StudentSubject,
-    Exam, GeneralExam, Result, Attendance, ReportCard, AttendanceReport
+    Exam, GradeSheet, SubjectGrade, ClassStatistics, OverallStatistics,
+    GeneralExam, GeneralExamWeight, GeneralExamGradeSheet, GeneralExamSubjectGrade,
+    GeneralExamClassStatistics, GeneralExamOverallStatistics
 )
+from decimal import Decimal
+from factory import LazyAttribute
+from factory.fuzzy import FuzzyDecimal
+
+
+
+
 
 class SchoolFactory(DjangoModelFactory):
     class Meta:
@@ -42,9 +52,9 @@ class AcademicYearFactory(DjangoModelFactory):
         model = AcademicYear
 
     school = factory.SubFactory(SchoolFactory)
-    year = factory.Faker('year')
-    start_date = factory.Faker('date_this_year', before_today=True, after_today=False)
-    end_date = factory.Faker('date_this_year', before_today=False, after_today=True)
+    year = factory.Sequence(lambda n: f"{2023+n}-{2024+n}")
+    start_date = factory.Faker('date_between', start_date='-1y', end_date='today')
+    end_date = factory.LazyAttribute(lambda o: o.start_date + timezone.timedelta(days=365))
     is_current = factory.Faker('boolean', chance_of_getting_true=25)
 
 class ClassFactory(DjangoModelFactory):
@@ -55,6 +65,7 @@ class ClassFactory(DjangoModelFactory):
     name = factory.Sequence(lambda n: f'Class {n}')
     academic_year = factory.SubFactory(AcademicYearFactory)
     capacity = factory.Faker('random_int', min=20, max=40)
+    class_master = factory.LazyFunction(lambda: Teacher.objects.order_by('?').first())
 
 class SubjectFactory(DjangoModelFactory):
     class Meta:
@@ -66,6 +77,7 @@ class SubjectFactory(DjangoModelFactory):
     default_credit = FuzzyDecimal(0.5, 5.0)
     description = factory.Faker('text', max_nb_chars=200)
     subject_type = FuzzyChoice(['MANDATORY', 'ELECTIVE'])
+    is_active = factory.Faker('boolean', chance_of_getting_true=90)
 
 class ClassSubjectFactory(DjangoModelFactory):
     class Meta:
@@ -74,12 +86,14 @@ class ClassSubjectFactory(DjangoModelFactory):
     class_obj = factory.SubFactory(ClassFactory)
     subject = factory.SubFactory(SubjectFactory)
     credit = factory.SelfAttribute('subject.default_credit')
-    max_students = factory.SelfAttribute('class_obj.capacity')
+    max_students = factory.LazyAttribute(lambda o: o.class_obj.capacity)
+    is_active = factory.Faker('boolean', chance_of_getting_true=90)
 
 class UserFactory(DjangoModelFactory):
     class Meta:
         model = User
 
+    school = factory.SubFactory(SchoolFactory)
     username = factory.Faker('user_name')
     email = factory.Faker('email')
     first_name = factory.Faker('first_name')
@@ -98,6 +112,7 @@ class TeacherFactory(DjangoModelFactory):
 class TeacherSubjectFactory(DjangoModelFactory):
     class Meta:
         model = TeacherSubject
+        django_get_or_create = ('teacher', 'subject', 'class_obj')
 
     teacher = factory.SubFactory(TeacherFactory)
     subject = factory.SubFactory(SubjectFactory)
@@ -108,8 +123,10 @@ class StudentFactory(DjangoModelFactory):
     class Meta:
         model = Student
 
+    school = factory.SubFactory(SchoolFactory)
     first_name = factory.Faker('first_name')
     last_name = factory.Faker('last_name')
+    matricula_code = factory.Sequence(lambda n: f'STD{n:06}')
     current_class = factory.SubFactory(ClassFactory)
     date_of_birth = factory.Faker('date_of_birth', minimum_age=10, maximum_age=20)
     gender = FuzzyChoice(['M', 'F', 'O'])
@@ -121,6 +138,11 @@ class StudentFactory(DjangoModelFactory):
     parent_email = factory.Faker('email')
     parent_address = factory.Faker('address')
     date_enrolled = factory.Faker('date_this_decade')
+    is_active = factory.Faker('boolean', chance_of_getting_true=90)
+    results_access_payed = factory.Faker('boolean', chance_of_getting_true=50)
+    results_access_date_payed = factory.LazyFunction(lambda: timezone.now().date() if random.choice([True, False]) else None)
+    results_access_phone_number_payed = factory.Faker('phone_number')
+
 
 class StudentDocumentFactory(DjangoModelFactory):
     class Meta:
@@ -131,15 +153,20 @@ class StudentDocumentFactory(DjangoModelFactory):
     file = factory.django.FileField(filename='document.pdf')
     description = factory.Faker('sentence')
 
+
+
 class StudentSubjectFactory(DjangoModelFactory):
     class Meta:
         model = StudentSubject
+        django_get_or_create = ('student', 'class_subject', 'academic_year')
 
     student = factory.SubFactory(StudentFactory)
     class_subject = factory.SubFactory(ClassSubjectFactory)
     academic_year = factory.SelfAttribute('class_subject.class_obj.academic_year')
     enrollment_date = factory.Faker('date_this_year')
     is_active = factory.Faker('boolean', chance_of_getting_true=90)
+
+
 
 class ExamFactory(DjangoModelFactory):
     class Meta:
@@ -153,6 +180,70 @@ class ExamFactory(DjangoModelFactory):
     is_active = factory.Faker('boolean', chance_of_getting_true=50)
     max_score = 20.00
 
+
+class GradeSheetFactory(DjangoModelFactory):
+    class Meta:
+        model = GradeSheet
+
+    student = factory.SubFactory(StudentFactory)
+    exam = factory.SubFactory(ExamFactory)
+    class_obj = factory.SelfAttribute('student.current_class')
+    academic_year = factory.SelfAttribute('exam.academic_year')
+    total_score = FuzzyDecimal(0, 100)
+    credits_attempted = FuzzyDecimal(10, 30)
+    
+    credits_obtained = LazyAttribute(lambda o: 
+        Decimal(min(
+            float(o.credits_attempted),  # Use credits_attempted directly
+            float(FuzzyDecimal(0, 30).evaluate(0, None, None))  # Directly evaluate the FuzzyDecimal
+        )).quantize(Decimal('0.01'))
+    )
+    
+    average = FuzzyDecimal(0, 20)
+    remark = LazyAttribute(lambda o: 'PASSED' if float(o.average) >= 10 else 'FAILED')
+    rank = factory.Faker('random_int', min=1, max=50)
+
+
+
+
+class SubjectGradeFactory(DjangoModelFactory):
+    class Meta:
+        model = SubjectGrade
+
+    grade_sheet = factory.SubFactory(GradeSheetFactory)
+    class_subject = factory.SubFactory(ClassSubjectFactory)
+    score = FuzzyDecimal(0, 20)
+    rank = factory.Faker('random_int', min=1, max=50)
+    exam_taken = factory.Faker('boolean', chance_of_getting_true=95)
+    observation = factory.Faker('sentence')
+
+class ClassStatisticsFactory(DjangoModelFactory):
+    class Meta:
+        model = ClassStatistics
+
+    exam = factory.SubFactory(ExamFactory)
+    class_obj = factory.SubFactory(ClassFactory)
+    class_subject = factory.SubFactory(ClassSubjectFactory)
+    academic_year = factory.SelfAttribute('exam.academic_year')
+    max_score = FuzzyDecimal(15, 20)
+    min_score = FuzzyDecimal(0, 10)
+    avg_score = FuzzyDecimal(10, 15)
+    num_sat = factory.Faker('random_int', min=10, max=40)
+    num_passed = factory.LazyAttribute(lambda o: random.randint(0, o.num_sat))
+    percentage_passed = factory.LazyAttribute(lambda o: (o.num_passed / o.num_sat) * 100 if o.num_sat > 0 else 0)
+
+class OverallStatisticsFactory(DjangoModelFactory):
+    class Meta:
+        model = OverallStatistics
+
+    exam = factory.SubFactory(ExamFactory)
+    class_obj = factory.SubFactory(ClassFactory)
+    academic_year = factory.SelfAttribute('exam.academic_year')
+    num_students = factory.Faker('random_int', min=20, max=100)
+    num_passes = factory.LazyAttribute(lambda o: random.randint(0, o.num_students))
+    class_average = FuzzyDecimal(5, 15)
+    overall_percentage_pass = factory.LazyAttribute(lambda o: (o.num_passes / o.num_students) * 100 if o.num_students > 0 else 0)
+
 class GeneralExamFactory(DjangoModelFactory):
     class Meta:
         model = GeneralExam
@@ -162,57 +253,60 @@ class GeneralExamFactory(DjangoModelFactory):
     academic_year = factory.SubFactory(AcademicYearFactory)
     start_date = factory.LazyFunction(timezone.now)
     end_date = factory.LazyAttribute(lambda o: o.start_date + timezone.timedelta(days=14))
+    total_coefficient = FuzzyDecimal(1, 5)
 
-    @factory.post_generation
-    def exams(self, create, extracted, **kwargs):
-        if not create:
-            return
-
-        if extracted:
-            for exam in extracted:
-                self.exams.add(exam)
-        else:
-            for _ in range(3):
-                self.exams.add(ExamFactory(school=self.school, academic_year=self.academic_year))
-
-class ResultFactory(DjangoModelFactory):
+class GeneralExamWeightFactory(DjangoModelFactory):
     class Meta:
-        model = Result
+        model = GeneralExamWeight
 
-    student = factory.SubFactory(StudentFactory)
-    class_subject = factory.SubFactory(ClassSubjectFactory)
+    general_exam = factory.SubFactory(GeneralExamFactory)
     exam = factory.SubFactory(ExamFactory)
-    mark = FuzzyDecimal(0, 20, precision=2)
-    created_by = factory.SubFactory(UserFactory, user_type='T')
-    comments = factory.Faker('paragraph')
+    weight = FuzzyDecimal(0.1, 1)
 
-class AttendanceFactory(DjangoModelFactory):
+class GeneralExamGradeSheetFactory(DjangoModelFactory):
     class Meta:
-        model = Attendance
+        model = GeneralExamGradeSheet
 
     student = factory.SubFactory(StudentFactory)
+    general_exam = factory.SubFactory(GeneralExamFactory)
+    class_obj = factory.SelfAttribute('student.current_class')
+    academic_year = factory.SelfAttribute('general_exam.academic_year')
+    total_score = FuzzyDecimal(0, 100)
+    average = FuzzyDecimal(0, 20)
+    rank = factory.Faker('random_int', min=1, max=50)
+    remark = factory.LazyAttribute(lambda o: 'PASSED' if o.average >= 10 else 'FAILED')
+
+class GeneralExamSubjectGradeFactory(DjangoModelFactory):
+    class Meta:
+        model = GeneralExamSubjectGrade
+
+    grade_sheet = factory.SubFactory(GeneralExamGradeSheetFactory)
     class_subject = factory.SubFactory(ClassSubjectFactory)
-    date = factory.Faker('date_this_year')
-    is_present = factory.Faker('boolean', chance_of_getting_true=90)
-    reason = factory.LazyAttribute(lambda o: factory.Faker('sentence') if not o.is_present else '')
+    calculated_score = FuzzyDecimal(0, 20)
+    rank = factory.Faker('random_int', min=1, max=50)
+    observation = factory.Faker('sentence')
 
-class ReportCardFactory(DjangoModelFactory):
+class GeneralExamClassStatisticsFactory(DjangoModelFactory):
     class Meta:
-        model = ReportCard
+        model = GeneralExamClassStatistics
 
-    student = factory.SubFactory(StudentFactory)
-    academic_year = factory.SubFactory(AcademicYearFactory)
-    total_average = FuzzyDecimal(0, 20, precision=2)
-    class_rank = factory.Faker('random_int', min=1, max=50)
-    comments = factory.Faker('paragraph')
+    general_exam = factory.SubFactory(GeneralExamFactory)
+    class_obj = factory.SubFactory(ClassFactory)
+    class_subject = factory.SubFactory(ClassSubjectFactory)
+    max_score = FuzzyDecimal(15, 20)
+    min_score = FuzzyDecimal(0, 10)
+    avg_score = FuzzyDecimal(10, 15)
+    num_students = factory.Faker('random_int', min=10, max=40)
+    num_passed = factory.LazyAttribute(lambda o: random.randint(0, o.num_students))
+    percentage_passed = factory.LazyAttribute(lambda o: (o.num_passed / o.num_students) * 100 if o.num_students > 0 else 0)
 
-class AttendanceReportFactory(DjangoModelFactory):
+class GeneralExamOverallStatisticsFactory(DjangoModelFactory):
     class Meta:
-        model = AttendanceReport
+        model = GeneralExamOverallStatistics
 
-    student = factory.SubFactory(StudentFactory)
-    academic_year = factory.SubFactory(AcademicYearFactory)
-    total_days = factory.Faker('random_int', min=150, max=200)
-    days_present = factory.LazyAttribute(lambda o: random.randint(0, o.total_days))
-    days_absent = factory.LazyAttribute(lambda o: o.total_days - o.days_present)
-    attendance_percentage = factory.LazyAttribute(lambda o: (o.days_present / o.total_days) * 100 if o.total_days > 0 else 0)
+    general_exam = factory.SubFactory(GeneralExamFactory)
+    class_obj = factory.SubFactory(ClassFactory)
+    num_students = factory.Faker('random_int', min=20, max=100)
+    num_passes = factory.LazyAttribute(lambda o: random.randint(0, o.num_students))
+    class_average = FuzzyDecimal(5, 15)
+    overall_percentage_pass = factory.LazyAttribute(lambda o: (o.num_passes / o.num_students) * 100 if o.num_students > 0 else 0)

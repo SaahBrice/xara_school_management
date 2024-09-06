@@ -33,7 +33,7 @@
                     {% if not academic_year.is_current %}
                     <form method="post" action="{% url 'set_current_academic_year' academic_year.pk %}" style="display: inline;">
                         {% csrf_token %}
-                        <button type="submit" class="btn btn-sm btn-primary">Set Current</button>
+                        <button type="submit" class="btn btn-sm btn-primary">Set as current</button>
                     </form>
                     {% endif %}
                 </td>

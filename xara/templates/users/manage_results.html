@@ -1,64 +1,55 @@
 {% extends "users/dashboard_base.html" %}
-{% load crispy_forms_tags %}
+{% load static %}
+
+{% block title %}Manage Results{% endblock %}
 
 {% block dashboard_content %}
 <h2>Manage Results</h2>
-<form method="post">
-    {% csrf_token %}
-    <div class="mb-3">
-        <label for="academic_year">Academic Year:</label>
-        <select id="academic_year" name="academic_year" class="form-control" required>
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <select id="academic-year-select" class="form-select">
             <option value="">Select Academic Year</option>
             {% for year in academic_years %}
                 <option value="{{ year.id }}">{{ year.year }}</option>
             {% endfor %}
         </select>
     </div>
-    <div class="mb-3">
-        <label for="class">Class:</label>
-        <select id="class" name="class" class="form-control" required disabled>
+    <div class="col-md-4">
+        <select id="class-select" class="form-select" disabled>
             <option value="">Select Class</option>
         </select>
     </div>
-    <div class="mb-3">
-        <label for="student">Student:</label>
-        <select id="student" name="student" class="form-control" required disabled>
-            <option value="">Select Student</option>
+    <div class="col-md-4">
+        <select id="exam-select" class="form-select" disabled>
+            <option value="">Select Exam</option>
         </select>
     </div>
-    <button type="submit" class="btn btn-primary">Manage Results</button>
-</form>
+</div>
+
+<input type="text" id="searchInput" class="form-control mb-3" placeholder="Search by student name">
+<div id="tableContainer" class="table-responsive"></div>
+<div id="overallStats" class="mt-3"></div>
+
+<div id="modalContainer" class="modal fade" tabindex="-1" aria-labelledby="studentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="studentModalLabel">Student Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Modal content will be injected here -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
-<script>
-    document.getElementById('academic_year').addEventListener('change', function() {
-        const academicYearId = this.value;
-        fetch(`/users/get-classes/?academic_year_id=${academicYearId}`)
-            .then(response => response.json())
-            .then(data => {
-                const classSelect = document.getElementById('class');
-                classSelect.innerHTML = '<option value="">Select Class</option>';
-                data.forEach(cls => {
-                    classSelect.innerHTML += `<option value="${cls.id}">${cls.name}</option>`;
-                });
-                classSelect.disabled = false;
-            });
-    });
-
-    document.getElementById('class').addEventListener('change', function() {
-        const classId = this.value;
-        fetch(`/users/get-students/?class_id=${classId}`)
-            .then(response => response.json())
-            .then(data => {
-                const studentSelect = document.getElementById('student');
-                studentSelect.innerHTML = '<option value="">Select Student</option>';
-                studentSelect.innerHTML += '<option value="all">All Students</option>';
-                data.forEach(student => {
-                    studentSelect.innerHTML += `<option value="${student.id}">${student.first_name} ${student.last_name}</option>`;
-                });
-                studentSelect.disabled = false;
-            });
-    });
-</script>
+<script src="{% static 'js/manage_results.js' %}"></script>
 {% endblock %}

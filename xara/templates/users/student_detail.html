@@ -62,6 +62,8 @@
         <a href="{% url 'manage_student_subjects' pk=student.pk %}" class="btn btn-primary">Manage Subjects</a>
     </div>
 </div>
-<a href="{% url 'student_edit' student.pk %}" class="btn btn-primary">Edit</a>
-<a href="{% url 'student_list' %}" class="btn btn-secondary">Back to List</a>
+<div class="my-4">
+    <a href="{% url 'student_edit' student.pk %}" class="btn btn-primary">Edit</a>
+    <a href="{% url 'student_list' %}" class="btn btn-secondary">Back to List</a>
+</div>
 {% endblock %}

@@ -5,10 +5,10 @@ from django.views.generic import TemplateView, RedirectView, FormView
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.shortcuts import redirect, get_object_or_404, render
-from result_system.models import AcademicYear, ClassSubject, Exam, GeneralExam, Result, StudentSubject, Subject, SystemSettings, Teacher, Class, Student, TeacherSubject, User
+from result_system.models import AcademicYear, ClassSubject, Exam, GeneralExam, GradeSheet, StudentSubject, Subject, SubjectGrade, SystemSettings, Teacher, Class, Student, TeacherSubject, User
 from django.views.generic import ListView
 from django.views.generic import DetailView, ListView, CreateView, UpdateView, DeleteView
-from .forms import AcademicYearForm, AssignSubjectForm, ClassForm, ExamForm, ExamSelectionForm, GeneralExamForm, StudentDocumentFormSet, StudentForm, StudentSubjectForm, SubjectForm, SystemSettingsForm, TeacherForm
+from .forms import AcademicYearForm, AssignSubjectForm, ClassForm, ExamForm, GeneralExamForm, StudentDocumentFormSet, StudentForm, StudentSubjectForm, SubjectForm, SystemSettingsForm, TeacherForm
 from .mixins import SecretaryRequiredMixin
 
 from django.db.models import Prefetch
@@ -16,8 +16,22 @@ from django.db import transaction
 import json
 from django.urls import reverse
 from django.views import View
-from django.db.models import Q
+
 from django.core.serializers.json import DjangoJSONEncoder
+
+from django.views.decorators.http import require_http_methods
+from django.views.decorators.csrf import csrf_exempt
+
+
+from django.db.models import Sum, Max, Min, Avg, Count, Q, Count,Case,When, F, FloatField, IntegerField, Value
+from django.db.models.functions import Coalesce
+from django.db.models.expressions import ExpressionWrapper
+
+
+
+from django.core.exceptions import ValidationError
+
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 
 
@@ -429,28 +443,32 @@ class ManageStudentSubjectsView(SecretaryRequiredMixin, FormView):
     def get_success_url(self):
         return reverse_lazy('student_detail', kwargs={'pk': self.student.pk})
 
-    @transaction.atomic
     def form_valid(self, form):
         selected_subjects = form.cleaned_data['subjects']
-        current_subjects = set(self.student.get_current_subjects().filter(class_subject__is_active=True).values_list('class_subject_id', flat=True))
+        current_academic_year = self.student.current_class.academic_year
 
-        # Deactivate unselected subjects
-        subjects_to_deactivate = current_subjects - set(selected_subjects)
-        StudentSubject.objects.filter(
-            student=self.student,
-            class_subject_id__in=subjects_to_deactivate,
-            academic_year=self.student.current_class.academic_year,
-            is_active=True
-        ).update(is_active=False)
+        with transaction.atomic():
+            # Get all active subjects for the student
+            current_subjects = set(StudentSubject.get_active_subjects_for_student(
+                self.student, current_academic_year
+            ).values_list('class_subject_id', flat=True))
 
-        # Activate or create newly selected subjects
-        for subject in selected_subjects:
-            StudentSubject.objects.update_or_create(
+            # Deactivate unselected subjects
+            subjects_to_deactivate = current_subjects - set(selected_subjects)
+            StudentSubject.objects.filter(
                 student=self.student,
-                class_subject=subject,
-                academic_year=self.student.current_class.academic_year,
-                defaults={'is_active': True}
-            )
+                class_subject_id__in=subjects_to_deactivate,
+                academic_year=current_academic_year
+            ).update(is_active=False)
+
+            # Activate or create newly selected subjects
+            for subject in selected_subjects:
+                StudentSubject.objects.update_or_create(
+                    student=self.student,
+                    class_subject=subject,
+                    academic_year=current_academic_year,
+                    defaults={'is_active': True}
+                )
 
         messages.success(self.request, "Student subjects updated successfully.")
         return super().form_valid(form)
@@ -623,6 +641,7 @@ class SystemSettingsView(SecretaryRequiredMixin, FormView):
     form_class = SystemSettingsForm
     success_url = reverse_lazy('system_settings')
 
+
     def get_form(self):
         try:
             instance = SystemSettings.objects.get(school=self.request.user.school)
@@ -633,6 +652,14 @@ class SystemSettingsView(SecretaryRequiredMixin, FormView):
             return self.form_class(self.request.POST, instance=instance)
         else:
             return self.form_class(instance=instance)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form_fields'] = [
+            (field.label, field.name, field.value() if field.value() is not None else '', field.help_text)
+            for field in self.get_form()
+        ]
+        return context
 
     def form_valid(self, form):
         try:
@@ -723,163 +750,179 @@ class GeneralExamDeleteView(DeleteView):
 
 
 
-class GradeCalculationView(TemplateView):
-    template_name = 'users/grade_calculation.html'
+
+
+class ManageResultsView(LoginRequiredMixin, SecretaryRequiredMixin, TemplateView):
+    template_name = 'users/manage_results.html'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        exam_id = self.request.GET.get('exam_id')
-        class_subject_id = self.request.GET.get('class_subject_id')
-        
-        if exam_id and class_subject_id:
-            exam = get_object_or_404(Exam, pk=exam_id)
-            class_subject = get_object_or_404(ClassSubject, pk=class_subject_id)
-            results = Result.objects.filter(exam=exam, class_subject=class_subject)
-            
-            graded_results = []
-            for result in results:
-                graded_results.append({
-                    'student': result.student,
-                    'mark': result.mark,
-                    'grade': result.calculate_grade()
-                })
-            
-            context['exam'] = exam
-            context['class_subject'] = class_subject
-            context['graded_results'] = graded_results
-        
-        context['form'] = ExamSelectionForm()
+        context['academic_years'] = AcademicYear.objects.filter(school=self.request.user.school)
         return context
-
-    def post(self, request, *args, **kwargs):
-        form = ExamSelectionForm(request.POST)
-        if form.is_valid():
-            exam = form.cleaned_data['exam']
-            class_subject = form.cleaned_data['class_subject']
-            return redirect(reverse('grade_calculation') + f'?exam_id={exam.id}&class_subject_id={class_subject.id}')
-        return self.get(request, *args, **kwargs)
-
-
-
-
-
-class ManageResultsView(LoginRequiredMixin, View):
-    def get(self, request):
-        academic_years = AcademicYear.objects.filter(school=request.user.school)
-        context = {'academic_years': academic_years}
-        return render(request, 'users/manage_results.html', context)
-
-    def post(self, request):
-        academic_year_id = request.POST.get('academic_year')
-        class_id = request.POST.get('class')
-        student_id = request.POST.get('student')
-
-        if student_id == 'all':
-            return redirect('bulk_edit_results', class_id=class_id)
-        else:
-            return redirect('edit_student_result', student_id=student_id)
-
-
-
-
-class EditStudentResultView(LoginRequiredMixin, View):
-    def get(self, request, student_id):
-        student = get_object_or_404(Student, id=student_id, school=request.user.school)
-        class_subjects = ClassSubject.objects.filter(class_obj=student.current_class, is_active=True)
-        exams = Exam.objects.filter(school=request.user.school, academic_year=student.current_class.academic_year)
-        results = Result.objects.filter(student=student, class_subject__in=class_subjects)
-
-        results_dict = {f"{result.class_subject_id}_{result.exam_id}": result.mark for result in results}
-
-        context = {
-            'student': student,
-            'class_subjects': class_subjects,
-            'exams': exams,
-            'results_json': json.dumps(results_dict, cls=DjangoJSONEncoder)
-        }
-        return render(request, 'users/edit_student_result.html', context)
-
-    def post(self, request, student_id):
-        student = get_object_or_404(Student, id=student_id, school=request.user.school)
-        class_subjects = ClassSubject.objects.filter(class_obj=student.current_class, is_active=True)
-        exam_id = request.POST.get('exam')
-        
-        if not exam_id:
-            messages.error(request, "Please select an exam.")
-            return redirect('edit_student_result', student_id=student_id)
-
-        exam = get_object_or_404(Exam, id=exam_id, school=request.user.school)
-
-        with transaction.atomic():
-            for class_subject in class_subjects:
-                mark = request.POST.get(f'mark_{class_subject.id}')
-                if mark:
-                    Result.objects.update_or_create(
-                        student=student,
-                        class_subject=class_subject,
-                        exam=exam,
-                        defaults={'mark': mark, 'created_by': request.user}
-                    )
-
-        messages.success(request, f"Results updated successfully for {student.get_full_name()}")
-        return redirect('edit_student_result', student_id=student_id)
-
-
-
-
-class BulkEditResultsView(LoginRequiredMixin, View):
-    def get(self, request, class_id):
-        class_obj = get_object_or_404(Class, id=class_id, school=request.user.school)
-        students = Student.objects.filter(current_class=class_obj)
-        class_subjects = ClassSubject.objects.filter(class_obj=class_obj, is_active=True)
-        exams = Exam.objects.filter(school=request.user.school, academic_year=class_obj.academic_year)
-        results = Result.objects.filter(student__in=students, class_subject__in=class_subjects)
-
-        results_dict = {f"{result.student_id}_{result.class_subject_id}_{result.exam_id}": result.mark for result in results}
-
-        context = {
-            'class': class_obj,
-            'students': students,
-            'class_subjects': class_subjects,
-            'exams': exams,
-            'results_json': json.dumps(results_dict, cls=DjangoJSONEncoder)
-        }
-        return render(request, 'users/bulk_edit_results.html', context)
-
-    def post(self, request, class_id):
-        class_obj = get_object_or_404(Class, id=class_id, school=request.user.school)
-        students = Student.objects.filter(current_class=class_obj)
-        class_subjects = ClassSubject.objects.filter(class_obj=class_obj, is_active=True)
-        exam_id = request.POST.get('exam')
-
-        if not exam_id:
-            messages.error(request, "Please select an exam.")
-            return redirect('bulk_edit_results', class_id=class_id)
-
-        exam = get_object_or_404(Exam, id=exam_id, school=request.user.school)
-
-        with transaction.atomic():
-            for student in students:
-                for class_subject in class_subjects:
-                    mark = request.POST.get(f'mark_{student.id}_{class_subject.id}')
-                    if mark:
-                        Result.objects.update_or_create(
-                            student=student,
-                            class_subject=class_subject,
-                            exam=exam,
-                            defaults={'mark': mark, 'created_by': request.user}
-                        )
-
-        messages.success(request, f"Results updated successfully for {class_obj.name}")
-        return redirect('bulk_edit_results', class_id=class_id)
 
 
 def get_classes(request):
-    academic_year_id = request.GET.get('academic_year_id')
+    academic_year_id = request.GET.get('academic_year')
     classes = Class.objects.filter(academic_year_id=academic_year_id, school=request.user.school)
     return JsonResponse(list(classes.values('id', 'name')), safe=False)
 
-def get_students(request):
-    class_id = request.GET.get('class_id')
-    students = Student.objects.filter(current_class_id=class_id, school=request.user.school)
-    return JsonResponse(list(students.values('id', 'first_name', 'last_name')), safe=False)
+def get_exams(request):
+    academic_year_id = request.GET.get('academic_year')
+    exams = Exam.objects.filter(academic_year_id=academic_year_id, school=request.user.school)
+    return JsonResponse(list(exams.values('id', 'name')), safe=False)
+
+def get_results(request):
+    academic_year_id = request.GET.get('academic_year')
+    class_id = request.GET.get('class')
+    exam_id = request.GET.get('exam')
+    
+    class_obj = Class.objects.get(id=class_id)
+    exam = Exam.objects.get(id=exam_id)
+    
+    subjects = ClassSubject.objects.filter(class_obj=class_obj).select_related('subject')
+
+    # Fetch teacher assignments
+    teacher_assignments = TeacherSubject.objects.filter(
+        class_obj=class_obj,
+        subject__in=subjects.values('subject')
+    ).select_related('teacher__user', 'subject')
+
+    # Create a dictionary to easily lookup teacher for each subject
+    teacher_lookup = {ta.subject.id: ta.teacher.user.get_full_name() for ta in teacher_assignments}
+
+    grade_sheets = GradeSheet.objects.filter(
+        academic_year_id=academic_year_id,
+        class_obj_id=class_id,
+        exam_id=exam_id
+    ).select_related('student').prefetch_related('subject_grades')
+    
+    subject_stats = SubjectGrade.objects.filter(
+        grade_sheet__exam_id=exam_id,
+        grade_sheet__class_obj_id=class_id
+    ).values('class_subject__subject__id').annotate(
+        max_score=Max('score'),
+        min_score=Min('score'),
+        avg_score=Avg('score'),
+        num_sat=Count('id'),
+        num_passed=Sum(Case(When(score__gte=10, then=1), default=0, output_field=IntegerField())),
+        percentage_passed=ExpressionWrapper(
+            Case(
+                When(num_sat__gt=0, then=F('num_passed') * 100.0 / F('num_sat')),
+                default=Value(0.0)
+            ),
+            output_field=FloatField()
+            )
+    )
+
+    subject_data = []
+    for subject in subjects:
+        stats = next((s for s in subject_stats if s['class_subject__subject__id'] == subject.subject.id), {})
+        subject_data.append({
+            'id': subject.subject.id,
+            'name': subject.subject.name,
+            'credit': subject.credit,
+            'teacher': teacher_lookup.get(subject.subject.id, 'Not Assigned'),
+            'max_score': stats.get('max_score'),
+            'min_score': stats.get('min_score'),
+            'avg_score': stats.get('avg_score'),
+            'num_sat': stats.get('num_sat', 0),
+            'num_passed': stats.get('num_passed', 0),
+            'percentage_passed': stats.get('percentage_passed', 0)
+        })
+
+    students_data = []
+    for grade_sheet in grade_sheets:
+        grades = []
+        for subject in subjects:
+            grade = next((g for g in grade_sheet.subject_grades.all() if g.class_subject.subject.id == subject.subject.id), None)
+            grades.append({
+                'score': grade.score if grade else None,
+                'rank': grade.rank if grade else None
+            })
+        
+        students_data.append({
+            'id': grade_sheet.student.id,
+            'name': grade_sheet.student.get_full_name(),
+            'grades': grades,
+            'total': grade_sheet.total_score,
+            'creditsAttempted': grade_sheet.credits_attempted,
+            'average': grade_sheet.average,
+            'remark': grade_sheet.remark,
+            'rank': grade_sheet.rank
+        })
+
+    overall_stats = {
+        'num_students': grade_sheets.count(),
+        'num_passes': grade_sheets.filter(remark='PASSED').count(),
+        'class_average': grade_sheets.aggregate(Avg('average'))['average__avg'] or 0,
+        'overall_percentage_pass': (grade_sheets.filter(remark='PASSED').count() / grade_sheets.count()) * 100 if grade_sheets.count() > 0 else 0
+    }
+
+    return JsonResponse({
+        'subjects': subject_data,
+        'students': students_data,
+        'overall_stats': overall_stats
+    })
+
+
+
+@require_http_methods(["POST"])
+@csrf_exempt
+def save_grade(request):
+    data = json.loads(request.body)
+    student_id = data.get('student_id')
+    subject_id = data.get('subject_id')
+    score = data.get('score')
+    exam_id = data.get('exam_id')
+
+    try:
+        with transaction.atomic():
+            grade_sheet = GradeSheet.objects.get(
+                student_id=student_id,
+                exam_id=exam_id
+            )
+            class_subject = ClassSubject.objects.get(
+                class_obj=grade_sheet.class_obj,
+                subject_id=subject_id
+            )
+            
+            # Convert score to Decimal, round to 2 decimal places, and validate
+            try:
+                score = Decimal(score).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                if score < 0 or score > 20:  # Adjust this range as needed
+                    raise ValidationError("Score must be between 0 and 20")
+            except (InvalidOperation, ValidationError) as e:
+                return JsonResponse({'success': False, 'error': str(e)})
+
+            subject_grade, created = SubjectGrade.objects.get_or_create(
+                grade_sheet=grade_sheet,
+                class_subject=class_subject,
+                defaults={'score': score}
+            )
+            if not created:
+                subject_grade.score = score
+                subject_grade.save()
+
+            # Recalculate GradeSheet
+            grade_sheet.calculate_totals_and_average(prevent_recursive_save=True)
+
+            # Recalculate ranks
+            GradeSheet.bulk_update_ranks(grade_sheet.exam, grade_sheet.class_obj)
+            SubjectGrade.bulk_update_ranks(grade_sheet.exam, grade_sheet.class_obj, class_subject)
+
+        return JsonResponse({
+            'success': True, 
+            'rounded_score': float(score),
+            'total_score': float(grade_sheet.total_score),
+            'average': float(grade_sheet.average),
+            'remark': grade_sheet.remark,
+            'rank': grade_sheet.rank
+        })
+    except GradeSheet.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Grade sheet not found'})
+    except ClassSubject.DoesNotExist:
+        return JsonResponse({'success': False, 'error': 'Subject not found for this class'})
+    except ValidationError as e:
+        return JsonResponse({'success': False, 'error': str(e)})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': f"An unexpected error occurred: {str(e)}"})

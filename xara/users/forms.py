@@ -1,7 +1,8 @@
 import json
 from django import forms
 from django.contrib.auth import get_user_model
-from result_system.models import AcademicYear, Exam, GeneralExam, Student, StudentDocument, SystemSettings, Teacher, Class, Subject, ClassSubject
+from result_system.models import AcademicYear, Exam, GeneralExam, Student, StudentDocument, StudentSubject, SystemSettings, Teacher, Class, Subject, ClassSubject
+from django.db import transaction
 
 
 
@@ -19,8 +20,10 @@ class StudentSubjectForm(forms.Form):
         self.student = kwargs.pop('student', None)
         super().__init__(*args, **kwargs)
         if self.student and self.student.current_class:
-            self.fields['subjects'].queryset = self.student.current_class.subjects.all()
-            self.initial['subjects'] = self.student.get_current_subjects().values_list('class_subject_id', flat=True)
+            self.fields['subjects'].queryset = self.student.current_class.subjects.filter(is_active=True)
+            self.initial['subjects'] = StudentSubject.get_active_subjects_for_student(
+                self.student, self.student.current_class.academic_year
+            ).values_list('class_subject_id', flat=True)
 
             
 class StudentDocumentForm(forms.ModelForm):
@@ -49,6 +52,7 @@ class StudentForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if school:
             self.fields['current_class'].queryset = Class.objects.filter(school=school)
+
 
 
 
@@ -87,37 +91,36 @@ class ClassForm(forms.ModelForm):
 
     def save_subjects(self, instance):
         if self.cleaned_data['subjects']:
-            current_subjects = set(ClassSubject.objects.filter(
-                class_obj=instance, 
-                is_active=True
-            ).values_list('subject_id', flat=True))
-            
-            new_subjects = set(self.cleaned_data['subjects'].values_list('id', flat=True))
+            with transaction.atomic():
+                current_subjects = set(ClassSubject.objects.filter(
+                    class_obj=instance
+                ).values_list('subject_id', flat=True))
+                
+                new_subjects = set(self.cleaned_data['subjects'].values_list('id', flat=True))
 
-            # Deactivate subjects that are no longer selected
-            subjects_to_deactivate = current_subjects - new_subjects
-            ClassSubject.objects.filter(
-                class_obj=instance,
-                subject_id__in=subjects_to_deactivate
-            ).update(is_active=False)
-
-            # Add new subjects
-            subjects_to_add = new_subjects - current_subjects
-            for subject_id in subjects_to_add:
-                subject = Subject.objects.get(id=subject_id)
-                ClassSubject.objects.create(
+                # Deactivate subjects that are no longer selected
+                subjects_to_deactivate = current_subjects - new_subjects
+                ClassSubject.objects.filter(
                     class_obj=instance,
-                    subject=subject,
-                    credit=subject.default_credit
-                )
+                    subject_id__in=subjects_to_deactivate
+                ).update(is_active=False)
 
-            # Reactivate subjects that were previously deactivated
-            subjects_to_reactivate = new_subjects & current_subjects
-            ClassSubject.objects.filter(
-                class_obj=instance,
-                subject_id__in=subjects_to_reactivate,
-                is_active=False
-            ).update(is_active=True)
+                # Add new subjects or reactivate existing ones
+                subjects_to_add_or_reactivate = new_subjects - current_subjects
+                for subject_id in subjects_to_add_or_reactivate:
+                    subject = Subject.objects.get(id=subject_id)
+                    ClassSubject.objects.update_or_create(
+                        class_obj=instance,
+                        subject=subject,
+                        defaults={'is_active': True, 'credit': subject.default_credit}
+                    )
+
+                # Reactivate subjects that were previously deactivated
+                subjects_to_reactivate = new_subjects & current_subjects
+                ClassSubject.objects.filter(
+                    class_obj=instance,
+                    subject_id__in=subjects_to_reactivate
+                ).update(is_active=True)
 
 
 
@@ -237,7 +240,7 @@ class SystemSettingsForm(forms.ModelForm):
         model = SystemSettings
         fields = ['school_initials', 'academic_year_format', 'max_students_per_class', 'grading_system', 'default_pass_mark']
         widgets = {
-            'grading_system': forms.Textarea(attrs={'rows': 5}),
+            'grading_system': forms.Textarea(attrs={'rows': 20, 'style': 'font-family: monospace; font-size: 14px;'}),
         }
 
     def __init__(self, *args, **kwargs):
