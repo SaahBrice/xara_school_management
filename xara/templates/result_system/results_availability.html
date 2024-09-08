@@ -1,0 +1,33 @@
+{% extends "users/dashboard_base.html" %}
+
+{% block title %}Results Availability{% endblock %}
+
+{% block dashboard_content %}
+<h2>Results Availability</h2>
+
+<p>Academic Year: {{ academic_year.year }}</p>
+<p>Class: {{ class_obj.name }}</p>
+<p>Exam: {{ exam.name }}</p>
+
+{% if results_available %}
+    <div class="alert alert-success">
+        Student results are available.
+    </div>
+{% else %}
+    <div class="alert alert-warning">
+        Students results not available.
+        <button id="createResultsButton" class="btn btn-primary">Create Results</button>
+    </div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function() {
+        $('#createResultsButton').click(function() {
+            alert('This functionality is not implemented yet.');
+        });
+    });
+</script>
+{% endblock %}

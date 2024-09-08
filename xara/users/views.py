@@ -4,34 +4,21 @@ from django.http import JsonResponse
 from django.views.generic import TemplateView, RedirectView, FormView
 from django.urls import reverse_lazy
 from django.contrib import messages
-from django.shortcuts import redirect, get_object_or_404, render
-from result_system.models import AcademicYear, ClassSubject, Exam, GeneralExam, GradeSheet, StudentSubject, Subject, SubjectGrade, SystemSettings, Teacher, Class, Student, TeacherSubject, User
+from django.shortcuts import redirect, get_object_or_404
+from result_system.models import AcademicYear, ClassSubject, Exam, GeneralExam, GradeSheet, StudentSubject, Subject, SubjectGrade, SystemSettings, Teacher, Class, Student, TeacherSubject, User,ClassStatistics, OverallStatistics
 from django.views.generic import ListView
 from django.views.generic import DetailView, ListView, CreateView, UpdateView, DeleteView
 from .forms import AcademicYearForm, AssignSubjectForm, ClassForm, ExamForm, GeneralExamForm, StudentDocumentFormSet, StudentForm, StudentSubjectForm, SubjectForm, SystemSettingsForm, TeacherForm
 from .mixins import SecretaryRequiredMixin
-
 from django.db.models import Prefetch
 from django.db import transaction
 import json
 from django.urls import reverse
 from django.views import View
-
-from django.core.serializers.json import DjangoJSONEncoder
-
-from django.views.decorators.http import require_http_methods
-from django.views.decorators.csrf import csrf_exempt
-
-
-from django.db.models import Sum, Max, Min, Avg, Count, Q, Count,Case,When, F, FloatField, IntegerField, Value
-from django.db.models.functions import Coalesce
-from django.db.models.expressions import ExpressionWrapper
+from django.db.models import Q
 
 
 
-from django.core.exceptions import ValidationError
-
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 
 
@@ -752,177 +739,6 @@ class GeneralExamDeleteView(DeleteView):
 
 
 
-class ManageResultsView(LoginRequiredMixin, SecretaryRequiredMixin, TemplateView):
-    template_name = 'users/manage_results.html'
-
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['academic_years'] = AcademicYear.objects.filter(school=self.request.user.school)
-        return context
-
-
-def get_classes(request):
-    academic_year_id = request.GET.get('academic_year')
-    classes = Class.objects.filter(academic_year_id=academic_year_id, school=request.user.school)
-    return JsonResponse(list(classes.values('id', 'name')), safe=False)
-
-def get_exams(request):
-    academic_year_id = request.GET.get('academic_year')
-    exams = Exam.objects.filter(academic_year_id=academic_year_id, school=request.user.school)
-    return JsonResponse(list(exams.values('id', 'name')), safe=False)
-
-def get_results(request):
-    academic_year_id = request.GET.get('academic_year')
-    class_id = request.GET.get('class')
-    exam_id = request.GET.get('exam')
-    
-    class_obj = Class.objects.get(id=class_id)
-    exam = Exam.objects.get(id=exam_id)
-    
-    subjects = ClassSubject.objects.filter(class_obj=class_obj).select_related('subject')
-
-    # Fetch teacher assignments
-    teacher_assignments = TeacherSubject.objects.filter(
-        class_obj=class_obj,
-        subject__in=subjects.values('subject')
-    ).select_related('teacher__user', 'subject')
-
-    # Create a dictionary to easily lookup teacher for each subject
-    teacher_lookup = {ta.subject.id: ta.teacher.user.get_full_name() for ta in teacher_assignments}
-
-    grade_sheets = GradeSheet.objects.filter(
-        academic_year_id=academic_year_id,
-        class_obj_id=class_id,
-        exam_id=exam_id
-    ).select_related('student').prefetch_related('subject_grades')
-    
-    subject_stats = SubjectGrade.objects.filter(
-        grade_sheet__exam_id=exam_id,
-        grade_sheet__class_obj_id=class_id
-    ).values('class_subject__subject__id').annotate(
-        max_score=Max('score'),
-        min_score=Min('score'),
-        avg_score=Avg('score'),
-        num_sat=Count('id'),
-        num_passed=Sum(Case(When(score__gte=10, then=1), default=0, output_field=IntegerField())),
-        percentage_passed=ExpressionWrapper(
-            Case(
-                When(num_sat__gt=0, then=F('num_passed') * 100.0 / F('num_sat')),
-                default=Value(0.0)
-            ),
-            output_field=FloatField()
-            )
-    )
-
-    subject_data = []
-    for subject in subjects:
-        stats = next((s for s in subject_stats if s['class_subject__subject__id'] == subject.subject.id), {})
-        subject_data.append({
-            'id': subject.subject.id,
-            'name': subject.subject.name,
-            'credit': subject.credit,
-            'teacher': teacher_lookup.get(subject.subject.id, 'Not Assigned'),
-            'max_score': stats.get('max_score'),
-            'min_score': stats.get('min_score'),
-            'avg_score': stats.get('avg_score'),
-            'num_sat': stats.get('num_sat', 0),
-            'num_passed': stats.get('num_passed', 0),
-            'percentage_passed': stats.get('percentage_passed', 0)
-        })
-
-    students_data = []
-    for grade_sheet in grade_sheets:
-        grades = []
-        for subject in subjects:
-            grade = next((g for g in grade_sheet.subject_grades.all() if g.class_subject.subject.id == subject.subject.id), None)
-            grades.append({
-                'score': grade.score if grade else None,
-                'rank': grade.rank if grade else None
-            })
-        
-        students_data.append({
-            'id': grade_sheet.student.id,
-            'name': grade_sheet.student.get_full_name(),
-            'grades': grades,
-            'total': grade_sheet.total_score,
-            'creditsAttempted': grade_sheet.credits_attempted,
-            'average': grade_sheet.average,
-            'remark': grade_sheet.remark,
-            'rank': grade_sheet.rank
-        })
-
-    overall_stats = {
-        'num_students': grade_sheets.count(),
-        'num_passes': grade_sheets.filter(remark='PASSED').count(),
-        'class_average': grade_sheets.aggregate(Avg('average'))['average__avg'] or 0,
-        'overall_percentage_pass': (grade_sheets.filter(remark='PASSED').count() / grade_sheets.count()) * 100 if grade_sheets.count() > 0 else 0
-    }
-
-    return JsonResponse({
-        'subjects': subject_data,
-        'students': students_data,
-        'overall_stats': overall_stats
-    })
 
 
 
-@require_http_methods(["POST"])
-@csrf_exempt
-def save_grade(request):
-    data = json.loads(request.body)
-    student_id = data.get('student_id')
-    subject_id = data.get('subject_id')
-    score = data.get('score')
-    exam_id = data.get('exam_id')
-
-    try:
-        with transaction.atomic():
-            grade_sheet = GradeSheet.objects.get(
-                student_id=student_id,
-                exam_id=exam_id
-            )
-            class_subject = ClassSubject.objects.get(
-                class_obj=grade_sheet.class_obj,
-                subject_id=subject_id
-            )
-            
-            # Convert score to Decimal, round to 2 decimal places, and validate
-            try:
-                score = Decimal(score).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-                if score < 0 or score > 20:  # Adjust this range as needed
-                    raise ValidationError("Score must be between 0 and 20")
-            except (InvalidOperation, ValidationError) as e:
-                return JsonResponse({'success': False, 'error': str(e)})
-
-            subject_grade, created = SubjectGrade.objects.get_or_create(
-                grade_sheet=grade_sheet,
-                class_subject=class_subject,
-                defaults={'score': score}
-            )
-            if not created:
-                subject_grade.score = score
-                subject_grade.save()
-
-            # Recalculate GradeSheet
-            grade_sheet.calculate_totals_and_average(prevent_recursive_save=True)
-
-            # Recalculate ranks
-            GradeSheet.bulk_update_ranks(grade_sheet.exam, grade_sheet.class_obj)
-            SubjectGrade.bulk_update_ranks(grade_sheet.exam, grade_sheet.class_obj, class_subject)
-
-        return JsonResponse({
-            'success': True, 
-            'rounded_score': float(score),
-            'total_score': float(grade_sheet.total_score),
-            'average': float(grade_sheet.average),
-            'remark': grade_sheet.remark,
-            'rank': grade_sheet.rank
-        })
-    except GradeSheet.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Grade sheet not found'})
-    except ClassSubject.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Subject not found for this class'})
-    except ValidationError as e:
-        return JsonResponse({'success': False, 'error': str(e)})
-    except Exception as e:
-        return JsonResponse({'success': False, 'error': f"An unexpected error occurred: {str(e)}"})

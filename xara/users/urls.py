@@ -1,9 +1,11 @@
-from django.urls import path
+from django.urls import path,include
 from .views import (
     AcademicYearCreateView, AcademicYearDeleteView, AcademicYearListView, AcademicYearUpdateView, AddTeacherView, AssignSubjectView, ClassCreateView, ClassDeleteView, ClassListView, ClassUpdateView, CustomLoginView, CustomLogoutView, DashboardView, DeleteTeacherView, EditTeacherView, ExamCreateView, ExamDeleteView, ExamListView, ExamUpdateView, GeneralExamCreateView, GeneralExamDeleteView, GeneralExamListView, GeneralExamUpdateView,
-    GenericDashboardView, ManageResultsView, ManageStudentSubjectsView, SetCurrentAcademicYearView, StudentDeleteView, SubjectCreateView, SubjectDeleteView, SubjectListView, SubjectUpdateView, SystemSettingsView, TeacherDashboardView, SecretaryDashboardView, TeacherDetailView,
-    TeacherListView, ToggleStudentActiveView, ToggleSubjectActiveView, ToggleTeacherActiveView, StudentCreateView, StudentDetailView, StudentUpdateView, StudentListView, get_classes, get_exams, get_results, save_grade,
+    GenericDashboardView, ManageStudentSubjectsView, SetCurrentAcademicYearView, StudentDeleteView, SubjectCreateView, SubjectDeleteView, SubjectListView, SubjectUpdateView, SystemSettingsView, TeacherDashboardView, SecretaryDashboardView, TeacherDetailView,
+    TeacherListView, ToggleStudentActiveView, ToggleSubjectActiveView, ToggleTeacherActiveView, StudentCreateView, StudentDetailView, StudentUpdateView, StudentListView,
 )
+
+
 
 urlpatterns = [
     path('login/', CustomLoginView.as_view(), name='login'),
@@ -59,14 +61,6 @@ urlpatterns = [
     path('general-exams/create/', GeneralExamCreateView.as_view(), name='general_exam_create'),
     path('general-exams/<int:pk>/update/', GeneralExamUpdateView.as_view(), name='general_exam_update'),
     path('general-exams/<int:pk>/delete/', GeneralExamDeleteView.as_view(), name='general_exam_delete'),
-
-
-    path('manage-results/', ManageResultsView.as_view(), name='manage_results'),
-    path('api/classes/', get_classes, name='api_classes'),
-    path('api/exams/', get_exams, name='api_exams'),
-    path('api/results/', get_results, name='api_results'),
-    path('api/save-grade/', save_grade, name='api_save_grade'),
-
 
 
 ]

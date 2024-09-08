@@ -438,14 +438,11 @@ class Exam(models.Model):
 
 
 
-
-
-
 class GradeSheet(models.Model):
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='grade_sheets')
-    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='grade_sheets')
-    class_obj = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='grade_sheets')
-    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name='grade_sheets')
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='grade_sheets')
+    exam = models.ForeignKey('Exam', on_delete=models.CASCADE, related_name='grade_sheets')
+    class_obj = models.ForeignKey('Class', on_delete=models.CASCADE, related_name='grade_sheets')
+    academic_year = models.ForeignKey('AcademicYear', on_delete=models.CASCADE, related_name='grade_sheets')
     total_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     credits_attempted = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     credits_obtained = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
@@ -463,86 +460,9 @@ class GradeSheet(models.Model):
     def __str__(self):
         return f"{self.student.get_full_name()} - {self.exam.name} - {self.class_obj.name} - {self.academic_year}"
 
-    def calculate_totals_and_average(self, prevent_recursive_save=False):
-        try:
-            with transaction.atomic():
-                subject_grades = self.subject_grades.all().select_related('class_subject')
-                
-                aggregates = subject_grades.aggregate(
-                    total_score=Sum('score'),
-                    credits_attempted=Sum('class_subject__credit'),
-                    credits_obtained=Sum(Case(
-                        When(score__gte=10, then=F('class_subject__credit')),
-                        default=0,
-                        output_field=DecimalField()
-                    ))
-                )
-
-                self.total_score = aggregates['total_score'] or 0
-                self.credits_attempted = aggregates['credits_attempted'] or 0
-                self.credits_obtained = aggregates['credits_obtained'] or 0
-                
-                if self.credits_attempted > 0:
-                    self.average = self.total_score / self.credits_attempted
-                else:
-                    self.average = Decimal(0)
-
-                self.remark = 'PASSED' if float(self.average) >= 10 else 'FAILED'
-
-                # Prevent recursion using flag
-                if not prevent_recursive_save:
-                    self.save(prevent_recursive_save=True)
-
-                # Update statistics
-                ClassStatistics.update_statistics(self.exam, self.class_obj, self.academic_year)
-                OverallStatistics.update_statistics(self.exam, self.class_obj, self.academic_year)
-        except Exception as e:
-            raise GradeCalculationError(f"Error calculating totals and average: {str(e)}")
-
-    def calculate_rank(self, prevent_recursive_save=False):
-        try:
-            with transaction.atomic():
-                grade_sheets = GradeSheet.objects.filter(exam=self.exam, class_obj=self.class_obj)
-                sorted_averages = grade_sheets.order_by('-average').values_list('id', 'average')
-                
-                rank_mapping = {id: rank + 1 for rank, (id, _) in enumerate(sorted_averages)}
-                self.rank = rank_mapping[self.id]
-
-                if not prevent_recursive_save:
-                    self.save(prevent_recursive_save=True)
-        except Exception as e:
-            raise RankCalculationError(f"Error calculating rank: {str(e)}")
-
-    @classmethod
-    def bulk_update_ranks(cls, exam, class_obj):
-        """
-        Bulk update ranks for all grade sheets in a given exam and class.
-        """
-        try:
-            with transaction.atomic():
-                grade_sheets = cls.objects.filter(exam=exam, class_obj=class_obj)
-                sorted_grade_sheets = sorted(grade_sheets, key=lambda gs: gs.average, reverse=True)
-                
-                for rank, grade_sheet in enumerate(sorted_grade_sheets, start=1):
-                    grade_sheet.rank = rank
-                
-                cls.objects.bulk_update(sorted_grade_sheets, ['rank'])
-        except Exception as e:
-            raise GradeCalculationError(f"Error bulk updating ranks: {str(e)}")
-
-
-@receiver(post_save, sender=GradeSheet)
-def update_grade_sheet(sender, instance, created, **kwargs):
-    if not created and not kwargs.get('prevent_recursive_save', False):
-        instance.calculate_totals_and_average(prevent_recursive_save=True)
-        GradeSheet.bulk_update_ranks(instance.exam, instance.class_obj)
-
-
-
-
 class SubjectGrade(models.Model):
     grade_sheet = models.ForeignKey(GradeSheet, on_delete=models.CASCADE, related_name='subject_grades')
-    class_subject = models.ForeignKey(ClassSubject, on_delete=models.CASCADE, related_name='subject_grades')
+    class_subject = models.ForeignKey('ClassSubject', on_delete=models.CASCADE, related_name='subject_grades')
     score = models.DecimalField(
         max_digits=4, 
         decimal_places=2,
@@ -566,97 +486,11 @@ class SubjectGrade(models.Model):
         score = f"{self.score:.2f}" if self.score is not None else "N/A"
         return f"{self.grade_sheet.student.get_full_name()} - {self.class_subject.subject.name} - {status} - Score: {score}"
 
-    def save(self, *args, **kwargs):
-        """
-        Save the subject grade, update related fields, and recalculate statistics.
-        """
-        # Flag to prevent recursion
-        if kwargs.pop('prevent_recursive_save', False):
-            super().save(*args, **kwargs)
-            return
-        
-        with transaction.atomic():
-            if self.score is not None:
-                self.exam_taken = True
-                self.set_observation()
-            
-            super().save(*args, **kwargs)
-            
-            self.calculate_rank(save_rank=False)
-            self.grade_sheet.calculate_totals_and_average(prevent_recursive_save=True)
-
-    def set_observation(self):
-        """
-        Set the observation based on the grading system and the current score.
-        """
-        grading_system = self.grade_sheet.student.school.settings.grading_system
-        for grade, range_info in grading_system.items():
-            if range_info['min'] <= self.score <= range_info['max']:
-                self.observation = range_info['description']
-                break
-
-    def calculate_rank(self, save_rank = True ):
-        """
-        Calculate and update the rank of this subject grade within the class.
-        """
-        with transaction.atomic():
-            subject_grades = SubjectGrade.objects.filter(
-                grade_sheet__exam=self.grade_sheet.exam,
-                grade_sheet__class_obj=self.grade_sheet.class_obj,
-                class_subject=self.class_subject
-            ).order_by('-score')
-            
-            self.rank = list(subject_grades.values_list('score', flat=True)).index(self.score) + 1
-            if save_rank:
-                self.save(update_fields=['rank'])
-
-    @classmethod
-    def bulk_create_or_update(cls, grades_data):
-        """
-        Bulk create or update subject grades.
-        
-        :param grades_data: List of dictionaries containing grade data
-        """
-        bulk_mgr = BulkCreateManager(chunk_size=100)
-        for data in grades_data:
-            try:
-                grade, created = cls.objects.get_or_create(
-                    grade_sheet=data['grade_sheet'],
-                    class_subject=data['class_subject'],
-                    defaults={'score': data['score']}
-                )
-                if not created:
-                    grade.score = data['score']
-                bulk_mgr.add(grade, update=not created)
-            except Exception as e:
-                raise GradeCreationError(f"Error creating/updating grade: {str(e)}")
-        bulk_mgr.done()
-        
-    @classmethod
-    def bulk_update_ranks(cls, exam, class_obj, class_subject):
-        with transaction.atomic():
-            subject_grades = cls.objects.filter(
-                grade_sheet__exam=exam,
-                grade_sheet__class_obj=class_obj,
-                class_subject=class_subject
-            ).select_related('grade_sheet')
-            
-            sorted_grades = sorted(subject_grades, key=lambda sg: sg.score, reverse=True)
-            
-            for rank, grade in enumerate(sorted_grades, start=1):
-                grade.rank = rank
-            
-            cls.objects.bulk_update(sorted_grades, ['rank'])
-
-
-
-
-
 class ClassStatistics(models.Model):
-    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='class_statistics')
-    class_obj = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='class_statistics')
-    class_subject = models.ForeignKey(ClassSubject, on_delete=models.CASCADE, related_name='class_statistics')
-    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name='class_statistics')
+    exam = models.ForeignKey('Exam', on_delete=models.CASCADE, related_name='class_statistics')
+    class_obj = models.ForeignKey('Class', on_delete=models.CASCADE, related_name='class_statistics')
+    class_subject = models.ForeignKey('ClassSubject', on_delete=models.CASCADE, related_name='class_statistics')
+    academic_year = models.ForeignKey('AcademicYear', on_delete=models.CASCADE, related_name='class_statistics')
     max_score = models.DecimalField(max_digits=4, decimal_places=2)
     min_score = models.DecimalField(max_digits=4, decimal_places=2)
     avg_score = models.DecimalField(max_digits=4, decimal_places=2)
@@ -670,58 +504,10 @@ class ClassStatistics(models.Model):
     def __str__(self):
         return f"{self.class_subject.subject.name} - {self.class_obj.name} - {self.exam.name} - {self.academic_year}"
 
-    @classmethod
-    def update_statistics(cls, exam, class_obj, academic_year):
-        with transaction.atomic():
-            for class_subject in class_obj.subjects.all():
-                # Get subject grades for the specific class and exam
-                subject_grades = SubjectGrade.objects.filter(
-                    grade_sheet__exam=exam,
-                    grade_sheet__class_obj=class_obj,
-                    class_subject=class_subject
-                )
-
-                # Only process statistics if there are subject grades (students took the exam)
-                if subject_grades.exists():
-                    # Aggregate the scores
-                    stats = subject_grades.aggregate(
-                        max_score=Max('score'),
-                        min_score=Min('score'),
-                        avg_score=Avg('score'),
-                        num_sat=Count('id'),
-                        num_passed=Count('id', filter=Q(score__gte=10))
-                    )
-
-                    # Calculate the pass percentage
-                    if stats['num_sat'] > 0:
-                        stats['percentage_passed'] = (stats['num_passed'] / stats['num_sat']) * 100
-                    else:
-                        stats['percentage_passed'] = 0
-
-                    # Ensure that max_score, min_score, and avg_score are not None
-                    if stats['max_score'] is None or stats['min_score'] is None or stats['avg_score'] is None:
-                        continue  # Skip updating this subject if no meaningful data exists
-
-                    # Update or create the statistics for this class subject
-                    cls.objects.update_or_create(
-                        exam=exam,
-                        class_obj=class_obj,
-                        class_subject=class_subject,
-                        academic_year=academic_year,
-                        defaults={
-                            'max_score': stats['max_score'],
-                            'min_score': stats['min_score'],
-                            'avg_score': stats['avg_score'],
-                            'num_sat': stats['num_sat'],
-                            'num_passed': stats['num_passed'],
-                            'percentage_passed': stats['percentage_passed'],
-                        }
-                    )
-
 class OverallStatistics(models.Model):
-    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='overall_statistics')
-    class_obj = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='overall_statistics')
-    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name='overall_statistics')
+    exam = models.ForeignKey('Exam', on_delete=models.CASCADE, related_name='overall_statistics')
+    class_obj = models.ForeignKey('Class', on_delete=models.CASCADE, related_name='overall_statistics')
+    academic_year = models.ForeignKey('AcademicYear', on_delete=models.CASCADE, related_name='overall_statistics')
     num_students = models.PositiveIntegerField()
     num_passes = models.PositiveIntegerField()
     class_average = models.DecimalField(max_digits=4, decimal_places=2)
@@ -732,25 +518,6 @@ class OverallStatistics(models.Model):
 
     def __str__(self):
         return f"Overall Stats - {self.class_obj.name} - {self.exam.name} - {self.academic_year}"
-
-    @classmethod
-    def update_statistics(cls, exam, class_obj, academic_year):
-        with transaction.atomic():
-            grade_sheets = GradeSheet.objects.filter(exam=exam, class_obj=class_obj)
-            stats = grade_sheets.aggregate(
-                num_students=Count('id'),
-                num_passes=Count('id', filter=Q(average__gte=10)),
-                class_average=Avg('average')
-            )
-            stats['overall_percentage_pass'] = (stats['num_passes'] / stats['num_students'] * 100) if stats['num_students'] > 0 else 0
-            
-            cls.objects.update_or_create(
-                exam=exam,
-                class_obj=class_obj,
-                academic_year=academic_year,
-                defaults=stats
-            )
-
 
 
 
@@ -1095,42 +862,9 @@ def get_cached_overall_statistics(exam, class_obj):
             cache.set(cache_key, stats, timeout=3600)  # Cache for 1 hour
     return stats
 
-# Add signals to invalidate cache when statistics are updated
 
-@receiver(post_save, sender=ClassStatistics)
-def invalidate_class_statistics_cache(sender, instance, **kwargs):
-    cache_key = f'class_stats_{instance.exam.id}_{instance.class_obj.id}_{instance.class_subject.id}'
-    cache.delete(cache_key)
 
-@receiver(post_save, sender=OverallStatistics)
-def invalidate_overall_statistics_cache(sender, instance, **kwargs):
-    cache_key = f'overall_stats_{instance.exam.id}_{instance.class_obj.id}'
-    cache.delete(cache_key)
 
-# Optimize bulk operations for performance
-
-class BulkCreateManager(object):
-    def __init__(self, chunk_size=100):
-        self._create_queue = []
-        self._update_queue = []
-        self._chunk_size = chunk_size
-
-    def add(self, obj, update=False):
-        if update:
-            self._update_queue.append(obj)
-        else:
-            self._create_queue.append(obj)
-
-        if len(self._create_queue) >= self._chunk_size:
-            self.done()
-
-    def done(self):
-        if self._create_queue:
-            self.model_class.objects.bulk_create(self._create_queue)
-            self._create_queue = []
-        if self._update_queue:
-            self.model_class.objects.bulk_update(self._update_queue, self.update_fields)
-            self._update_queue = []
 
 
 

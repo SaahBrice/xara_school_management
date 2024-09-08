@@ -1,0 +1,124 @@
+{% extends "users/dashboard_base.html" %}
+{% load static %}
+
+{% block title %}Manage Results{% endblock %}
+
+{% block dashboard_content %}
+<h2>Manage Results</h2>
+
+<form id="resultSelectionForm" method="POST">
+    {% csrf_token %}
+    <div class="form-group">
+        <label for="academicYear">Academic Year:</label>
+        <select id="academicYear" name="academic_year" class="form-control">
+            <option value="">Select Academic Year</option>
+            {% for year in academic_years %}
+                <option value="{{ year.id }}">{{ year.year }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="class">Class:</label>
+        <select id="class" name="class" class="form-control" disabled>
+            <option value="">Select Class</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="exam">Exam:</label>
+        <select id="exam" name="exam" class="form-control" disabled>
+            <option value="">Select Exam</option>
+        </select>
+    </div>
+
+    <button type="submit" id="manageButton" class="btn btn-primary mt-4 px-4" style="display: none;">Manage</button>
+</form>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@10"></script>
+<script>
+    $(document).ready(function() {
+        function updateSelectOptions(selectId, options) {
+            var $select = $(selectId);
+            $select.empty().append('<option value="">Select</option>');
+            $.each(options, function(index, option) {
+                $select.append($('<option></option>').attr('value', option.id).text(option.name));
+            });
+            $select.prop('disabled', false);
+        }
+
+        function resetSelects(selectIds) {
+            $.each(selectIds, function(index, selectId) {
+                $(selectId).empty().append('<option value="">Select</option>').prop('disabled', true);
+            });
+        }
+
+        function checkAllSelected() {
+            return $('#academicYear').val() && $('#class').val() && $('#exam').val();
+        }
+
+        function toggleManageButton() {
+            if (checkAllSelected()) {
+                $('#manageButton').show();
+            } else {
+                $('#manageButton').hide();
+            }
+        }
+
+        $('#academicYear').change(function() {
+            var academicYearId = $(this).val();
+            if (academicYearId) {
+                $.get("{% url 'get_classes' %}", {academic_year: academicYearId}, function(data) {
+                    if (data.length === 0) {
+                        Swal.fire({
+                            title: 'No classes available',
+                            text: 'Do you want to create classes for this academic year?',
+                            icon: 'question',
+                            showCancelButton: true,
+                            confirmButtonText: 'Yes, create classes',
+                            cancelButtonText: 'No, cancel'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                window.location.href = "{% url 'class_add' %}";
+                            }
+                        });
+                    } else {
+                        updateSelectOptions('#class', data);
+                    }
+                });
+                $.get("{% url 'get_exams' %}", {academic_year: academicYearId}, function(data) {
+                    if (data.length === 0) {
+                        Swal.fire({
+                            title: 'No exams available',
+                            text: 'Do you want to create exams for this academic year?',
+                            icon: 'question',
+                            showCancelButton: true,
+                            confirmButtonText: 'Yes, create exams',
+                            cancelButtonText: 'No, cancel'
+                        }).then((result) => {
+                            if (result.isConfirmed) {
+                                window.location.href = "{% url 'exam_create' %}";
+                            }
+                        });
+                    } else {
+                        updateSelectOptions('#exam', data);
+                    }
+                });
+            } else {
+                resetSelects(['#class', '#exam']);
+            }
+            toggleManageButton();
+        });
+
+        $('#class, #exam').change(function() {
+            toggleManageButton();
+        });
+
+        // Initial check
+        toggleManageButton();
+    });
+</script>
+{% endblock %}
