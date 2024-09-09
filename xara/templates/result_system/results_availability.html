@@ -1,33 +1,616 @@
 {% extends "users/dashboard_base.html" %}
+{% load static %}
 
-{% block title %}Results Availability{% endblock %}
-
-{% block dashboard_content %}
-<h2>Results Availability</h2>
-
-<p>Academic Year: {{ academic_year.year }}</p>
-<p>Class: {{ class_obj.name }}</p>
-<p>Exam: {{ exam.name }}</p>
-
-{% if results_available %}
-    <div class="alert alert-success">
-        Student results are available.
-    </div>
-{% else %}
-    <div class="alert alert-warning">
-        Students results not available.
-        <button id="createResultsButton" class="btn btn-primary">Create Results</button>
-    </div>
-{% endif %}
+{% block title %}Results management{% endblock %}
+{% block page_title %}Results management{% endblock %}
+{% block extra_css %}
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+    }
+    .gridjs-td, .gridjs-th {
+        padding: 8px;
+        font-size: 12px;
+    }
+    .clickable-name {
+        color: blue;
+        cursor: pointer;
+        text-decoration: none;
+        font-size: 15px;
+    }
+    .failed {
+        color: red;
+        font-weight: bold;
+    }
+    .statistics-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    .statistics-table th, .statistics-table td {
+        border: 1px solid #e7e6e6;
+        padding: 4px;
+        text-align: left;
+    }
+    .statistics-table th {
+        background-color: #fdfdfd;
+    }
+    /* Sticky first column */
+    .gridjs-td:first-child,
+    .gridjs-th:first-child {
+        position: sticky;
+        left: 0;
+        z-index: 2; /* Keep the first column on top */
+        box-shadow: 1px 0px 2px rgba(0,0,0,0.1); /* Add a shadow for better visibility */
+    }
+</style>
 
 {% endblock %}
 
+
+{% block dashboard_content %}
+
+
+<div class=" mt-4">
+    <!-- Academic Year, Class, and Exam Information -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Academic Year</h5>
+                    <p class="card-text">{{ academic_year.year }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Class</h5>
+                    <p class="card-text">{{ class_obj.name }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Exam</h5>
+                    <p class="card-text">{{ exam.name }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+    <div class="">
+        <!-- Save Button -->
+        <div class=" mb-3">
+            <div class="btn-group" role="group" aria-label="Action buttons">
+                <button class="btn btn-secondary mr-2">
+                    <i class="fas fa-times-circle"></i> Cancel
+                </button>
+                <button class="btn btn-warning mx-2">
+                    <i class="fas fa-file-excel"></i> Export to Excel
+                </button>
+                <button class="btn btn-success mx-2">
+                    <i class="fas fa-file-pdf"></i> Print PDF
+                </button>
+                <button class="btn btn-primary ml-2">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+            
+
+        </div>
+    
+        <!-- Table Section -->
+        <div class="mb-4">
+            <h5 class="mb-3">Student Grades</h5>
+            <div id="table"></div>
+        </div>
+    
+        <!-- Class Statistics -->
+        <div class="mb-4">
+            <h5 class="mb-3">Class Statistics</h5>
+            <div id="classStatistics"></div>
+        </div>
+    
+        <!-- Overall Statistics -->
+        <div class="mb-4">
+            <h5 class="mb-3">Overall Statistics</h5>
+            <div id="overallStatistics"></div>
+        </div>
+    </div>
+    
+{% endblock %}
+
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-    $(document).ready(function() {
-        $('#createResultsButton').click(function() {
-            alert('This functionality is not implemented yet.');
+    const subjects = {{ subjects|safe }};
+    const studentsWithGrades = {{ students_with_grades|safe }};
+</script>
+
+
+
+
+
+
+<script>
+    function randomGaussian(mean = 10, stdDev = 4) {
+        let u = 1 - Math.random(); 
+        let v = Math.random();
+        let z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v); 
+        return Math.min(Math.max(mean + z * stdDev, 0), 20).toFixed(2); 
+    }
+
+    function generateStudents() {
+        return studentsWithGrades.map(student => {
+            const grades = subjects.map(subject => {
+                const studentGrade = student.grades.find(g => g.subject === subject.code);
+                return {
+                    subject: subject.code,
+                    credit: subject.credit,
+                    score: studentGrade ? studentGrade.score : null
+                };
+            });
+            return { name: student.name, grades };
         });
-    });
+    }
+
+    function calculateResults(students) {
+        students.forEach(student => {
+            student.creditsAttempted = student.grades
+                .filter(grade => grade.score !== null) // Skip absent subjects
+                .reduce((sum, grade) => sum + grade.credit, 0);
+
+            student.creditsObtained = student.grades
+                .filter(grade => grade.score !== null && grade.score >= 10)
+                .reduce((sum, grade) => sum + grade.credit, 0);
+
+            student.total = student.grades
+                .filter(grade => grade.score !== null) // Skip absent subjects
+                .reduce((sum, grade) => sum + (grade.score * grade.credit), 0);
+
+            student.average = student.creditsAttempted > 0
+                ? (student.total / student.creditsAttempted).toFixed(2)
+                : 'N/A'; // If no subjects were taken, average is N/A
+
+            student.remark = student.average >= 10 ? "Passed" : "Failed";
+        });
+
+        students.sort((a, b) => b.average - a.average);
+
+        // Adjust ranking to handle ties
+        let currentRank = 1; // Start ranking from 1
+        students.forEach((student, index) => {
+            if (index > 0 && student.average === students[index - 1].average) {
+                // If the current student has the same average as the previous one, assign the same rank
+                student.rank = students[index - 1].rank;
+            } else {
+                // Otherwise, assign the current rank and increment it
+                student.rank = currentRank;
+            }
+            currentRank++; // Always increment the rank, but only assigned to non-tied students
+        });
+
+        // Rank by individual subject scores (with ties and absence handling)
+        subjects.forEach(subject => {
+            let studentsWithScores = students.filter(student => {
+                const grade = student.grades.find(grade => grade.subject === subject.code);
+                return grade.score !== null; // Only include students who were present for this subject
+            });
+
+            // Sort students with valid scores in descending order (higher score = higher rank)
+            studentsWithScores.sort((a, b) => {
+                const scoreA = a.grades.find(grade => grade.subject === subject.code).score;
+                const scoreB = b.grades.find(grade => grade.subject === subject.code).score;
+                return scoreB - scoreA; // Sort descending by score
+            });
+
+            // Rank students with scores
+            let subjectRank = 1;
+            studentsWithScores.forEach((student, index) => {
+                const currentGrade = student.grades.find(grade => grade.subject === subject.code);
+                
+                if (index > 0) {
+                    const prevGrade = studentsWithScores[index - 1].grades.find(grade => grade.subject === subject.code);
+                    if (currentGrade.score === prevGrade.score) {
+                        // If tied, assign the same rank as the previous student
+                        currentGrade.rank = studentsWithScores[index - 1].grades.find(grade => grade.subject === subject.code).rank;
+                    } else {
+                        // Otherwise, assign the current rank
+                        currentGrade.rank = subjectRank;
+                    }
+                } else {
+                    // First student in the sorted list gets the current rank
+                    currentGrade.rank = subjectRank;
+                }
+                
+                subjectRank++;
+            });
+
+            // Assign 'N/A' rank for students who were absent (score is null)
+            students.forEach(student => {
+                const grade = student.grades.find(grade => grade.subject === subject.code);
+                if (grade.score === null) {
+                    grade.rank = 'N/A'; // Mark absent students with 'N/A'
+                }
+            });
+        });
+    }
+
+    function calculateClassStatistics(students) {
+        return subjects.map(subject => {
+            const subjectGrades = students.map(student => 
+                student.grades.find(grade => grade.subject === subject.code)
+            ).filter(grade => grade.score !== null);
+
+            const numSat = subjectGrades.length;
+                    // Handle the case where no student took the course
+        if (numSat === 0) {
+            return {
+                subject: subject.code,
+                maxScore: null, // No max score
+                minScore: null, // No min score
+                avgScore: "N/A", // No average score
+                numSat: 0, // No students sat for the exam
+                numPassed: 0, // No one passed
+                percentagePassed: "N/A" // No pass percentage
+            };
+        }
+
+            const numPassed = subjectGrades.filter(grade => grade.score >= 10).length;
+
+            return {
+                subject: subject.code,
+                maxScore: Math.max(...subjectGrades.map(grade => grade.score)),
+                minScore: Math.min(...subjectGrades.map(grade => grade.score)),
+                avgScore: (subjectGrades.reduce((sum, grade) => sum + grade.score, 0) / numSat).toFixed(2),
+                numSat,
+                numPassed,
+                percentagePassed: ((numPassed / numSat) * 100).toFixed(2)
+            };
+        });
+    }
+
+    function calculateOverallStatistics(students) {
+        const numStudents = students.length;
+    
+        // Handle the case where there are no students
+        if (numStudents === 0) {
+            return {
+                numStudents: 0,
+                numPasses: 0,
+                classAverage: "N/A",
+                overallPercentagePass: "N/A"
+            };
+        }
+    
+        const numPasses = students.filter(student => student.remark === "Passed").length;
+    
+        // Filter out invalid averages (e.g., "N/A") before calculating the class average
+        const validAverages = students
+            .map(student => parseFloat(student.average))
+            .filter(avg => !isNaN(avg)); // Remove invalid averages
+    
+        const classAverage = validAverages.length > 0
+            ? (validAverages.reduce((sum, avg) => sum + avg, 0) / validAverages.length).toFixed(2)
+            : "N/A"; // If no valid averages, return "N/A"
+    
+        const overallPercentagePass = ((numPasses / numStudents) * 100).toFixed(2);
+    
+        return {
+            numStudents,
+            numPasses,
+            classAverage,
+            overallPercentagePass: isNaN(overallPercentagePass) ? "N/A" : overallPercentagePass
+        };
+    }
+    
+
+    function getObservation(score) {
+        if (score === null || score === 0) return "";
+        if (score <= 5) return "V.POOR";
+        if (score <= 7) return "POOR";
+        if (score <= 9.9) return "B.AVERAGE";
+        if (score <= 11.9) return "AVERAGE";
+        if (score <= 14.9) return "FAIR";
+        if (score <= 16.9) return "GOOD";
+        if (score <= 18.9) return "V.GOOD";
+        if (score <= 20) return "EXCELLENT";
+        return "";
+    }
+
+    function renderTable(students) {
+        document.getElementById("table").innerHTML = "";
+
+        const grid = new gridjs.Grid({
+            columns: [
+                { 
+                    name: "Student Name", 
+                    width: "200px", 
+                    formatter: (cell, row) => {
+                        return gridjs.html(`<span class="clickable-name" data-name="${row.cells[0].data}">${cell}</span>`);
+                    }
+                },
+                ...subjects.map((subject, index) => ({
+                    name: `${subject.code} (${subject.credit})`,
+                    width: "150px",
+                    formatter: (cell, row) => {
+                        const score = cell === null ? 'Absent' : parseFloat(cell).toFixed(2);
+                        const isFail = score !== 'Absent' && parseFloat(score) < 10;
+                        return gridjs.html(`
+                            <span class="clickable-grade ${isFail ? 'failed' : ''}" data-student="${row.cells[0].data}" data-subject="${subjects[index].code}">
+                                ${score}
+                            </span>`);
+                    }
+                })),
+                { name: "Cds Att", width: "120px" },
+                { name: "Cds Obt", width: "120px" },
+                { name: "Total Score", width: "130px" },
+                {
+                    name: "Average",
+                    width: "130px",
+                    formatter: (cell) => {
+                        const isFail = cell !== 'N/A' && parseFloat(cell) < 10;
+                        return gridjs.html(`<span class="${isFail ? 'failed' : ''}">${cell}</span>`);
+                    }
+                },
+                { name: "Rank", width: "100px" },
+                {
+                    name: "Remark",
+                    width: "130px",
+                    formatter: (cell) => {
+                        return gridjs.html(`<span class="${cell === 'Failed' ? 'failed' : ''}">${cell}</span>`);
+                    }
+                }
+            ],
+            data: students.map(student => [
+                student.name,
+                ...student.grades.map(grade => grade.score === null ? 'Absent' : grade.score),
+                student.creditsAttempted,
+                student.creditsObtained,
+                student.total.toFixed(2),
+                student.average,
+                student.rank,
+                student.remark
+            ]),
+            paging: true,
+            sort: true,
+            search: true,
+            scrollX: true,
+            scrollY: true,
+            width: '100%',
+            height: '100%',
+            fixedHeader: true
+        });
+
+        grid.render(document.getElementById("table"));
+
+        document.getElementById("table").addEventListener("click", function (event) {
+            if (event.target.classList.contains("clickable-grade")) {
+                const studentName = event.target.getAttribute("data-student");
+                const subjectCode = event.target.getAttribute("data-subject");
+
+                const student = students.find(s => s.name === studentName);
+                const grade = student.grades.find(g => g.subject === subjectCode);
+
+                Swal.fire({
+                    title: `Edit Grade for ${studentName} in ${subjectCode}`,
+                    input: 'number',
+                    inputValue: grade.score === null ? '' : grade.score,
+                    inputAttributes: {
+                        min: 0,
+                        max: 20,
+                        step: 0.01
+                    },
+                    showCancelButton: true,
+                    confirmButtonText: 'Save',
+                    preConfirm: (newScore) => {
+                        if (newScore === '') {
+                            // If input is empty, mark the student as "Absent"
+                            return null;
+                        }
+
+                        const score = parseFloat(newScore);
+                        const validScore = /^[0-9]{1,2}(\.[0-9]{1,2})?$/.test(newScore) && score >= 0 && score <= 20;
+
+                        if (!validScore) {
+                            Swal.showValidationMessage('Please enter a valid score between 0.00 and 20.00, up to two decimal places.');
+                            return false;
+                        }
+                        return score;
+                    }
+                }).then(result => {
+                    if (result.isConfirmed) {
+                        grade.score = result.value; // Update with either score or null (Absent)
+
+                        calculateResults(students);
+                        renderStatistics(students);
+
+                        grid.updateConfig({
+                            data: students.map(student => [
+                                student.name,
+                                ...student.grades.map(grade => grade.score === null ? 'Absent' : grade.score),
+                                student.creditsAttempted,
+                                student.creditsObtained,
+                                student.total.toFixed(2),
+                                student.average,
+                                student.rank,
+                                student.remark
+                            ])
+                        }).forceRender();  // Re-render with updated data
+                    }
+                });
+            }
+
+            if (event.target.classList.contains("clickable-name")) {
+                const studentName = event.target.getAttribute("data-name");
+                const student = students.find(s => s.name === studentName);
+                showStudentDetails(student, students);
+            }
+        });
+    }
+
+    function renderStatistics(students) {
+        const classStats = calculateClassStatistics(students);
+        const overallStats = calculateOverallStatistics(students);
+
+        // Render Class Statistics (transposed)
+        const classStatsHtml = `
+            
+        <table class="statistics-table">
+            <thead>
+                <tr>
+                    <th>Statistic</th>
+                    ${subjects.map(subject => `<th>${subject.code}</th>`).join('')}
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th>Max Score</th>
+                    ${classStats.map(stat => `<td>${stat.maxScore !== null ? stat.maxScore.toFixed(2) : 'N/A'}</td>`).join('')}
+                </tr>
+                <tr>
+                    <th>Min Score</th>
+                    ${classStats.map(stat => `<td>${stat.minScore !== null ? stat.minScore.toFixed(2) : 'N/A'}</td>`).join('')}
+                </tr>
+                <tr>
+                    <th>Avg Score</th>
+                    ${classStats.map(stat => `<td>${stat.avgScore !== 'N/A' ? stat.avgScore : 'N/A'}</td>`).join('')}
+                </tr>
+                <tr>
+                    <th>Students Sat</th>
+                    ${classStats.map(stat => `<td>${stat.numSat}</td>`).join('')}
+                </tr>
+                <tr>
+                    <th>Students Passed</th>
+                    ${classStats.map(stat => `<td>${stat.numPassed}</td>`).join('')}
+                </tr>
+                <tr>
+                    <th>Pass Percentage</th>
+                    ${classStats.map(stat => `<td>${stat.percentagePassed !== 'N/A' ? stat.percentagePassed + '%' : 'N/A'}</td>`).join('')}
+                </tr>
+            </tbody>
+        </table>
+
+        `;
+
+        document.getElementById("classStatistics").innerHTML = classStatsHtml;
+
+        // Render Overall Statistics
+        const overallStatsHtml = `
+            
+        <table class="statistics-table">
+            <tr>
+                <th>Total Students</th>
+                <td>${overallStats.numStudents}</td>
+            </tr>
+            <tr>
+                <th>Students Passed</th>
+                <td>${overallStats.numPasses}</td>
+            </tr>
+            <tr>
+                <th>Class Average</th>
+                <td>${overallStats.classAverage !== 'N/A' ? overallStats.classAverage : 'N/A'}</td>
+            </tr>
+            <tr>
+                <th>Overall Pass Percentage</th>
+                <td>${overallStats.overallPercentagePass !== 'N/A' ? overallStats.overallPercentagePass + '%' : 'N/A'}</td>
+            </tr>
+        </table>
+        `;
+
+        document.getElementById("overallStatistics").innerHTML = overallStatsHtml;
+    }
+
+    function showStudentDetails(student, allStudents) {
+        const classStats = calculateClassStatistics(allStudents);
+        const gradeDetails = student.grades.map(grade => {
+            const totalStudentsSat = allStudents.filter(s => 
+                s.grades.find(g => g.subject === grade.subject && g.score !== null)
+            ).length;
+            
+            const scoreClass = grade.score !== null && grade.score < 10 ? 'failed' : '';
+            const scoreDisplay = grade.score === null ? 'Absent' : grade.score.toFixed(2);
+            const subjectAvg = classStats.find(stat => stat.subject === grade.subject).avgScore;
+            const observation = getObservation(grade.score);
+            const rankDisplay = grade.rank === 'N/A' ? 'N/A' : `${grade.rank}/${totalStudentsSat}`;
+
+            return `
+                <tr style="border-bottom: 1px solid #ddd;">
+                    <td style="padding: 8px; text-align: left;"><strong>${grade.subject}</strong></td>
+                    <td style="padding: 8px; text-align: right;" class="${scoreClass}">${scoreDisplay}</td>
+                    <td style="padding: 8px; text-align: right;">${subjectAvg}</td>
+                    <td style="padding: 8px; text-align: center;">${observation}</td>
+                    <td style="padding: 8px; text-align: right;">${rankDisplay}</td>
+                </tr>`;
+        }).join('');
+
+        const remarkClass = student.remark === 'Failed' ? 'failed' : '';
+        const averageClass = parseFloat(student.average) < 10 ? 'failed' : '';
+
+        const content = `
+            <div style="text-align: left; font-size: 15px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr><td style="padding: 8px;"><strong>Name:</strong></td><td style="padding: 8px;">${student.name}</td></tr>
+                    <tr><td style="padding: 8px;"><strong>Credits Attempted:</strong></td><td style="padding: 8px;">${student.creditsAttempted}</td></tr>
+                    <tr><td style="padding: 8px;"><strong>Credits Obtained:</strong></td><td style="padding: 8px;">${student.creditsObtained}</td></tr>
+                    <tr><td style="padding: 8px;"><strong>Total Score:</strong></td><td style="padding: 8px;">${student.total.toFixed(2)}</td></tr>
+                    <tr><td style="padding: 8px;"><strong>Average:</strong></td><td style="padding: 8px;" class="${averageClass}">${student.average}</td></tr>
+                    <tr><td style="padding: 8px;"><strong>Remark:</strong></td><td style="padding: 8px;" class="${remarkClass}">${student.remark}</td></tr>
+                    <tr><td style="padding: 8px;"><strong>Rank:</strong></td><td style="padding: 8px;">${student.rank}/${allStudents.length}</td></tr>
+                </table>
+                <br>
+                <strong>Subject Details:</strong>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+                    <thead style="background-color: #f2f2f2;">
+                        <tr style="border-bottom: 2px solid #ddd;">
+                            <th style="padding: 8px; text-align: left;">Subject</th>
+                            <th style="padding: 8px; text-align: right;">Score</th>
+                            <th style="padding: 8px; text-align: right;">Average</th>
+                            <th style="padding: 8px; text-align: center;">Observation</th>
+                            <th style="padding: 8px; text-align: right;">Rank</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${gradeDetails}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        Swal.fire({
+            title: `Details for ${student.name}`,
+            html: content,
+            icon: 'info',
+            width: '800px',
+            showCloseButton: true,
+            showCancelButton: true,
+            focusConfirm: false,
+            confirmButtonText: 'Close',
+            cancelButtonText: 'Print Report',
+            customClass: {
+                popup: 'swal-popup',
+            }
+        }).then((result) => {
+            if (result.dismiss === Swal.DismissReason.cancel) {
+                // Handle print report functionality here
+                console.log('Print report for', student.name);
+                // For now, we'll just show an alert
+                Swal.fire('Print Report', 'Printing functionality will be implemented soon.', 'info');
+            }
+        });
+    }
+
+    function main() {
+        const students = generateStudents();
+        calculateResults(students);
+        renderTable(students);
+        renderStatistics(students);
+    }
+
+    main();
 </script>
 {% endblock %}

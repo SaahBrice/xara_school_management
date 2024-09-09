@@ -2,10 +2,11 @@
 {% load static %}
 
 {% block title %}Manage Results{% endblock %}
-
+{% block page_title %}Manage Results{% endblock %}
 {% block dashboard_content %}
-<h2>Manage Results</h2>
-
+<div class="alert alert-primary my-4 " role="alert">
+    Select from the field below the academic year, class and exam to manage
+  </div>
 <form id="resultSelectionForm" method="POST">
     {% csrf_token %}
     <div class="form-group">
