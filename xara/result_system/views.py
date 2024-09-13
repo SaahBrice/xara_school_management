@@ -5,10 +5,11 @@ from django.http import JsonResponse
 from .models import AcademicYear, Class, ClassSubject, Exam, GradeSheet, Student, SubjectGrade, ClassStatistics, OverallStatistics, TeacherSubject
 from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
-from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models import Prefetch
 from django.core.exceptions import ObjectDoesNotExist
-
+from django.shortcuts import get_object_or_404
+from django.db.models import Value
+from django.db.models.functions import Concat
 
 class ManageResultsView(View):
     template_name = 'result_system/manage_results.html'
@@ -224,6 +225,30 @@ class ResultsAvailabilityView(View):
 
 
 
+def parse_value(value, expected_type='decimal'):
+    """
+    Helper function to convert 'Absent', 'N/A', 'None', or null values to appropriate data types.
+    - 'decimal' returns None if the value is invalid, allowing fields to stay unset.
+    - 'int' for integer fields like ranks or counts, where valid.
+    """
+    if expected_type == 'decimal':
+        try:
+            # Return None if the value is invalid or if it's supposed to be absent
+            return float(value) if value not in ['Absent', 'N/A', None] else None
+        except ValueError:
+            return None
+    elif expected_type == 'int':
+        try:
+            # Return None for invalid rank values
+            return int(value) if value not in ['Absent', 'N/A', None] else None
+        except ValueError:
+            return None
+    else:
+        # For string values or other data types, return the value or None if absent
+        return value if value not in ['Absent', 'N/A', None] else None
+
+
+
 
 @csrf_exempt
 def update_results(request):
@@ -232,45 +257,105 @@ def update_results(request):
 
         try:
             with transaction.atomic():
+                # Fetch academic year, class, and exam from IDs
+                academic_year = AcademicYear.objects.get(id=data['academic_year_id'])
+                class_obj = Class.objects.get(id=data['class_id'])
+                exam = Exam.objects.get(id=data['exam_id'])
+
+                print(f"Processing update for class '{class_obj.name}', academic year '{academic_year.year}', exam '{exam.name}'")
+
+                # Fetch all students in the given class and academic year
+                students_in_class = Student.objects.filter(current_class=class_obj, is_active=True)
+
+                # Iterate through the students' data from the request
                 for student_data in data['students']:
-                    # Update GradeSheet
-                    grade_sheet = GradeSheet.objects.get(id=student_data['id'])
-                    grade_sheet.total_score = student_data['new_total_score']
-                    grade_sheet.average = student_data['new_average']
-                    grade_sheet.remark = student_data['new_remark']
-                    grade_sheet.rank = student_data['new_rank']
-                    grade_sheet.save()
+                    # Match student by full name from the students enrolled in the class for the given academic year
+                    matching_students = students_in_class.annotate(
+                        full_name=Concat('first_name', Value(' '), 'last_name')
+                    ).filter(full_name=student_data['name'])
+                    
+                    if matching_students.exists():
+                        student = matching_students.first()
+                        print(f"Processing grades for student: {student.get_full_name()}")
 
-                    # Update SubjectGrade for the student
-                    for grade in student_data['grades']:
-                        subject_grade = SubjectGrade.objects.get(id=grade['id'])
-                        subject_grade.score = grade['new_score']
-                        subject_grade.rank = grade['new_rank']
-                        subject_grade.save()
+                        # Fetch the student's existing grade sheet
+                        grade_sheet = GradeSheet.objects.get(
+                            student=student,
+                            exam=exam,
+                            class_obj=class_obj,
+                            academic_year=academic_year
+                        )
 
-                # Update ClassStatistics and OverallStatistics
-                for subject, stats in data['class_stats'].items():
-                    class_stat = ClassStatistics.objects.get(class_subject__subject__name=subject)
-                    class_stat.max_score = stats['new_max_score']
-                    class_stat.min_score = stats['new_min_score']
-                    class_stat.avg_score = stats['new_avg_score']
-                    class_stat.num_sat = stats['new_num_sat']
-                    class_stat.num_passed = stats['new_num_passed']
-                    class_stat.percentage_passed = stats['new_percentage_passed']
+                        # Update the grade sheet fields (allow None for unset values)
+                        grade_sheet.total_score = parse_value(student_data.get('totalScore'), 'decimal')
+                        grade_sheet.credits_attempted = parse_value(student_data.get('creditsAttempted'), 'decimal')
+                        grade_sheet.credits_obtained = parse_value(student_data.get('creditsObtained'), 'decimal')
+                        grade_sheet.average = parse_value(student_data.get('average'), 'decimal')
+                        grade_sheet.rank = parse_value(student_data.get('rank'), 'int')
+                        grade_sheet.remark = parse_value(student_data.get('remark'), 'string')
+                        grade_sheet.save()
+                        print(f"Updated GradeSheet for {student.get_full_name()}")
+
+                        # Now iterate through the student's grades and update the SubjectGrade model
+                        for grade_data in student_data['grades']:
+                            # Fetch the class subject by its code
+                            class_subject = get_object_or_404(ClassSubject, class_obj=class_obj, subject__code=grade_data['subject'])
+
+                            # Fetch the subject grade
+                            subject_grade = SubjectGrade.objects.get(
+                                grade_sheet=grade_sheet,
+                                class_subject=class_subject
+                            )
+
+                            # Update the subject grade fields, handling 'Absent', 'N/A', and other invalid values
+                            # If the score is absent, it will be set to None
+                            subject_grade.score = parse_value(grade_data.get('score'), 'decimal')
+                            subject_grade.rank = parse_value(grade_data.get('rank'), 'int')
+                            subject_grade.observation = parse_value(grade_data.get('observation'), 'string')
+                            subject_grade.save()
+                            print(f"Updated SubjectGrade for {student.get_full_name()} in subject {class_subject.subject.name}: Score = {subject_grade.score}")
+                    else:
+                        print(f"Student {student_data['name']} not found in class {class_obj.name} for academic year {academic_year.year}.")
+
+                # Update ClassStatistics
+                for stat_data in data['classStats']:
+                    class_subject = get_object_or_404(ClassSubject, class_obj=class_obj, subject__code=stat_data['subject'])
+                    class_stat = ClassStatistics.objects.get(
+                        exam=exam,
+                        class_obj=class_obj,
+                        class_subject=class_subject,
+                        academic_year=academic_year
+                    )
+
+                    # Update class statistics fields, using None for unset values
+                    class_stat.max_score = parse_value(stat_data['maxScore'], 'decimal')
+                    class_stat.min_score = parse_value(stat_data['minScore'], 'decimal')
+                    class_stat.avg_score = parse_value(stat_data['avgScore'], 'decimal')
+                    class_stat.num_sat = parse_value(stat_data['numSat'], 'int')
+                    class_stat.num_passed = parse_value(stat_data['numPassed'], 'int')
+                    class_stat.percentage_passed = parse_value(stat_data['percentagePassed'], 'decimal')
+                    print(class_stat.percentage_passed)
                     class_stat.save()
+                    print(f"Updated ClassStatistics for {class_subject.subject.name}")
 
+                # Update OverallStatistics
                 overall_stat = OverallStatistics.objects.get(
-                    academic_year_id=data['academic_year_id'],
-                    class_obj_id=data['class_id'],
-                    exam_id=data['exam_id']
+                    exam=exam,
+                    class_obj=class_obj,
+                    academic_year=academic_year
                 )
-                overall_stat.num_students = data['overall_stats']['new_num_students']
-                overall_stat.num_passes = data['overall_stats']['new_num_passes']
-                overall_stat.class_average = data['overall_stats']['new_class_average']
-                overall_stat.overall_percentage_pass = data['overall_stats']['new_overall_percentage_pass']
-                overall_stat.save()
 
-            return JsonResponse({"status": "success"})
+                # Update overall statistics fields, allowing None where appropriate
+                overall_stat.num_students = parse_value(data['overallStats']['numStudents'], 'int')
+                overall_stat.num_passes = parse_value(data['overallStats']['numPasses'], 'int')
+                overall_stat.class_average = parse_value(data['overallStats']['classAverage'], 'decimal')
+                overall_stat.overall_percentage_pass = parse_value(data['overallStats']['overallPercentagePass'], 'decimal')
+                overall_stat.save()
+                print(f"Updated OverallStatistics")
+
+                return JsonResponse({"status": "success"})
 
         except Exception as e:
+            # Handle any errors
+            print(f"Error occurred: {str(e)}")
             return JsonResponse({"status": "error", "message": str(e)}, status=400)

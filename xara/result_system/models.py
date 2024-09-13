@@ -491,12 +491,12 @@ class ClassStatistics(models.Model):
     class_obj = models.ForeignKey('Class', on_delete=models.CASCADE, related_name='class_statistics')
     class_subject = models.ForeignKey('ClassSubject', on_delete=models.CASCADE, related_name='class_statistics')
     academic_year = models.ForeignKey('AcademicYear', on_delete=models.CASCADE, related_name='class_statistics')
-    max_score = models.DecimalField(max_digits=4, decimal_places=2)
-    min_score = models.DecimalField(max_digits=4, decimal_places=2)
-    avg_score = models.DecimalField(max_digits=4, decimal_places=2)
-    num_sat = models.PositiveIntegerField()
-    num_passed = models.PositiveIntegerField()
-    percentage_passed = models.DecimalField(max_digits=5, decimal_places=2)
+    max_score = models.DecimalField(max_digits=4, decimal_places=2, null=True)
+    min_score = models.DecimalField(max_digits=4, decimal_places=2, null=True)
+    avg_score = models.DecimalField(max_digits=4, decimal_places=2, null=True)
+    num_sat = models.PositiveIntegerField( null=True)
+    num_passed = models.PositiveIntegerField(null=True)
+    percentage_passed = models.DecimalField(max_digits=5, decimal_places=2, null=True)
 
     class Meta:
         unique_together = ('exam', 'class_obj', 'class_subject', 'academic_year')

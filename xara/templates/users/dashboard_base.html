@@ -11,10 +11,19 @@
     <script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link href="https://cdn.jsdelivr.net/npm/gridjs/dist/theme/mermaid.min.css" rel="stylesheet" />
+    <link rel="stylesheet" href="https://unpkg.com/tippy.js@6/animations/scale.css" />
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+    <script src="https://unpkg.com/tippy.js@6"></script>
     <style>
         body {
             font-size: .875rem;
         }
+        /* Use Flexbox for a dynamic layout */
+        .container-fluid {
+            display: flex;
+        }
+
+        /* Sidebar styling */
         .sidebar {
             position: fixed;
             top: 0;
@@ -23,26 +32,31 @@
             z-index: 100;
             padding: 48px 0 0;
             box-shadow: inset -1px 0 0 rgba(0, 0, 0, .1);
+            transition: all 0.3s ease;
+            width: 250px;
+            flex-shrink: 0;
         }
-        .sidebar-sticky {
-            position: relative;
-            top: 0;
-            height: calc(100vh - 48px);
-            padding-top: .5rem;
-            overflow-x: hidden;
-            overflow-y: auto;
+
+        /* Collapsed state for the sidebar */
+        .sidebar.collapsed {
+            width: 80px;
         }
+
         .sidebar .nav-link {
             font-weight: 500;
             color: #333;
         }
+
         .sidebar .nav-link.active {
             color: #007bff;
         }
-        .sidebar-heading {
+
+        .sidebar .sidebar-heading {
             font-size: .75rem;
             text-transform: uppercase;
         }
+
+        /* Navbar and other styling */
         .navbar-brand {
             padding-top: .75rem;
             padding-bottom: .75rem;
@@ -50,141 +64,190 @@
             background-color: rgba(0, 0, 0, .25);
             box-shadow: inset -1px 0 0 rgba(0, 0, 0, .25);
         }
-        .navbar .navbar-toggler {
-            top: .25rem;
-            right: 1rem;
+
+        /* The main content container should adjust its margin based on the sidebar */
+        .main-content {
+            flex-grow: 1;
+            padding: 1rem;
+            margin-left: 250px;
+            transition: margin-left 0.3s ease;
         }
-        main {
-            padding-top: 1.5rem;
+
+        .sidebar.collapsed + .main-content {
+            margin-left: 80px;
+        }
+
+        .sidebar-icon {
+            display: none;
+        }
+
+        .sidebar.collapsed .sidebar-icon {
+            display: inline-block;
+        }
+
+        .sidebar.collapsed .sidebar-text {
+            display: none;
+        }
+
+        /* Additional styling for responsive viewports */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                position: relative;
+            }
+
+            .sidebar.collapsed {
+                width: 100%;
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .sidebar.collapsed + .main-content {
+                margin-left: 0;
+            }
         }
     </style>
     {% block extra_css %}{% endblock extra_css %}
 </head>
 <body>
     <div class="container-fluid">
-        <div class="row">
-            <!-- Sidebar -->
-            <nav id="sidebar" class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse">
-                <div class="position-sticky pt-3">
-                    <a href="{% url 'secretary_dashboard' %}" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto link-dark text-decoration-none">
-                        <span class="fs-4">Xara SMS</span>
-                    </a>
-                    <hr>
-                    <ul class="nav flex-column">
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'secretary_dashboard' %}active{% endif %}" href="{% url 'secretary_dashboard' %}">
-                                <i class="bi bi-house-door"></i> Dashboard
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'teacher_list' %}active{% endif %}" href="{% url 'teacher_list' %}">
-                                <i class="bi bi-people"></i> Teachers
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'class' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'class_list' %}">
-                                <i class="bi bi-grid"></i> Classes
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'student' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'student_list' %}">
-                                <i class="bi bi-mortarboard"></i> Students
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'academic' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'academic_year_list' %}">
-                                <i class="bi bi-calendar-event"></i> Academic Years
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'subject' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'subject_list' %}">
-                                <i class="bi bi-book"></i> Subjects
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'settings' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'system_settings' %}">
-                                <i class="bi bi-gear"></i> Settings
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'exam' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'exam_list' %}">
-                                <i class="bi bi-book-half"></i> Single Exams
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'general' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'general_exam_list' %}">
-                                <i class="bi bi-box-seam"></i> General Exams
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'manage-results' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'manage_results' %}">
-                                <i class="bi bi-clipboard"></i> Manage Results
-                            </a>
-                        </li>
-                    </ul>
-                </div>
-            </nav>
+        <!-- Sidebar -->
+        <nav id="sidebar" class="sidebar bg-light">
+            <div class="position-sticky pt-3">
+                <a href="{% url 'secretary_dashboard' %}" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto link-dark text-decoration-none">
+                    <span class="fs-4 sidebar-text">Xara SMS</span>
+                    <i class="bi bi-house-door sidebar-icon"></i>
+                </a>
+                <hr>
+                <ul class="nav flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'secretary_dashboard' %}active{% endif %}" href="{% url 'secretary_dashboard' %}">
+                            <i class="bi bi-house-door"></i>
+                            <span class="sidebar-text">Dashboard</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'teacher_list' %}active{% endif %}" href="{% url 'teacher_list' %}">
+                            <i class="bi bi-people"></i>
+                            <span class="sidebar-text">Teachers</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'class' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'class_list' %}">
+                            <i class="bi bi-grid"></i>
+                            <span class="sidebar-text">Classes</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'student' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'student_list' %}">
+                            <i class="bi bi-mortarboard"></i>
+                            <span class="sidebar-text">Students</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'academic' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'academic_year_list' %}">
+                            <i class="bi bi-calendar-event"></i>
+                            <span class="sidebar-text">Academic Years</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'subject' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'subject_list' %}">
+                            <i class="bi bi-book"></i>
+                            <span class="sidebar-text">Subjects</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'settings' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'system_settings' %}">
+                            <i class="bi bi-gear"></i>
+                            <span class="sidebar-text">Settings</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'exam' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'exam_list' %}">
+                            <i class="bi bi-book-half"></i>
+                            <span class="sidebar-text">Single Exams</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'general' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'general_exam_list' %}">
+                            <i class="bi bi-box-seam"></i>
+                            <span class="sidebar-text">General Exams</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'manage-results' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'manage_results' %}">
+                            <i class="bi bi-clipboard"></i>
+                            <span class="sidebar-text">Manage Results</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
 
-            <!-- Main content -->
-            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
-                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
-                    <h1 class="h2">{% block page_title %}Dashboard{% endblock %}</h1>
-                    <div class="btn-toolbar mb-2 mb-md-0">
-                        <div class="btn-group me-2">
-                            <a href="{% url 'secretary_dashboard' %}" class="btn btn-sm btn-outline-secondary">Dashboard</a>
-                            <a href="{% url 'logout' %}" class="btn btn-sm btn-outline-secondary">Logout</a>
-                        </div>
-                    </div>
+        <!-- Main content -->
+        <main id="main-content" class="main-content">
+            <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <div class="btn-toolbar mb-2 mb-md-0">
+                    <!-- Sidebar Toggle Button -->
+                    <button id="sidebarToggle" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-list"></i>
+                    </button>
                 </div>
-                <div>
-                    {# Messages #}
-                    
-                    {% if messages %}
-                    <div class="container mt-3">
-                        {% for message in messages %}
-                            {% if message.level == DEFAULT_MESSAGE_LEVELS.DEBUG %}
-                                <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)" class="alert alert-info alert-dismissible fade show" role="alert">
-                                    {{ message }}
-                                    <button type="button" class="btn-close" @click="show = false" aria-label="Close"></button>
-                                </div>
-                            {% elif message.level == DEFAULT_MESSAGE_LEVELS.INFO %}
-                                <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)" class="alert alert-info alert-dismissible fade show" role="alert">
-                                    {{ message }}
-                                    <button type="button" class="btn-close" @click="show = false" aria-label="Close"></button>
-                                </div>
-                            {% elif message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %}
-                                <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)" class="alert alert-success alert-dismissible fade show" role="alert">
-                                    {{ message }}
-                                    <button type="button" class="btn-close" @click="show = false" aria-label="Close"></button>
-                                </div>
-                            {% elif message.level == DEFAULT_MESSAGE_LEVELS.WARNING %}
-                                <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)" class="alert alert-warning alert-dismissible fade show" role="alert">
-                                    {{ message }}
-                                    <button type="button" class="btn-close" @click="show = false" aria-label="Close"></button>
-                                </div>
-                            {% elif message.level == DEFAULT_MESSAGE_LEVELS.ERROR %}
-                                <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)" class="alert alert-danger alert-dismissible fade show" role="alert">
-                                    {{ message }}
-                                    <button type="button" class="btn-close" @click="show = false" aria-label="Close"></button>
-                                </div>
-                            {% else %}
-                                <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)" class="alert alert-secondary alert-dismissible fade show" role="alert">
-                                    {{ message }}
-                                    <button type="button" class="btn-close" @click="show = false" aria-label="Close"></button>
-                                </div>
-                            {% endif %}
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                    
-                        </div>
-                {% block dashboard_content %}
-                {% endblock dashboard_content %}
-            </main>
-        </div>
+                <h1 class="h2">{% block page_title %}Dashboard{% endblock %}</h1>
+            </div>
+            <div>
+                {# Messages #}
+                {% if messages %}
+                <div class="container mt-3">
+                    {% for message in messages %}
+                        {% if message.level == DEFAULT_MESSAGE_LEVELS.DEBUG %}
+                            <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)" class="alert alert-info alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" @click="show = false" aria-label="Close"></button>
+                            </div>
+                        {% elif message.level == DEFAULT_MESSAGE_LEVELS.INFO %}
+                            <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)" class="alert alert-info alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" @click="show = false" aria-label="Close"></button>
+                            </div>
+                        {% elif message.level == DEFAULT_MESSAGE_LEVELS.SUCCESS %}
+                            <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)" class="alert alert-success alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" @click="show = false" aria-label="Close"></button>
+                            </div>
+                        {% elif message.level == DEFAULT_MESSAGE_LEVELS.WARNING %}
+                            <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)" class="alert alert-warning alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" @click="show = false" aria-label="Close"></button>
+                            </div>
+                        {% elif message.level == DEFAULT_MESSAGE_LEVELS.ERROR %}
+                            <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)" class="alert alert-danger alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" @click="show = false" aria-label="Close"></button>
+                            </div>
+                        {% else %}
+                            <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 5000)" class="alert alert-secondary alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" @click="show = false" aria-label="Close"></button>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            {% block dashboard_content %}
+            {% endblock dashboard_content %}
+        </main>
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.getElementById('sidebarToggle').addEventListener('click', function() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        });
+    </script>
     {% block extra_js %}{% endblock extra_js %}
 </body>
 </html>

@@ -46,6 +46,7 @@
     }
 </style>
 
+
 {% endblock %}
 
 
@@ -83,24 +84,28 @@
 </div>
     <div class="">
         <!-- Save Button -->
-        <div class=" mb-3">
+        <div class="mb-3">
             <div class="btn-group" role="group" aria-label="Action buttons">
-                <button class="btn btn-secondary mr-2">
+                <!-- Cancel Button with Tooltip -->
+                <button class="btn btn-outline-secondary me-2" data-tippy-content="Cancel all edits">
                     <i class="fas fa-times-circle"></i> Cancel
                 </button>
-                <button class="btn btn-warning mx-2">
-                    <i class="fas fa-file-excel"></i> Export to Excel
+                <!-- Export to Excel Button with Tooltip -->
+                <button class="btn btn-outline-warning mx-2" data-tippy-content="Export to Excel">
+                    <i class="fas fa-file-excel"></i> Export
                 </button>
-                <button class="btn btn-success mx-2">
-                    <i class="fas fa-file-pdf"></i> Print PDF
+                <!-- Print PDF Button with Tooltip -->
+                <button class="btn btn-outline-success mx-2" data-tippy-content="Export to PDF">
+                    <i class="fas fa-file-pdf"></i> PDF
                 </button>
-                <button class="btn btn-primary ml-2">
-                    <i class="fas fa-save"></i> Save Changes
+                <!-- Save Changes Button with Tooltip -->
+                <button id= "save-results-btn" class="btn btn-outline-primary ms-2" data-tippy-content="Save edits">
+                    <i class="fas fa-save"></i> Save
                 </button>
             </div>
-            
-
         </div>
+        
+        
     
         <!-- Table Section -->
         <div class="mb-4">
@@ -127,8 +132,18 @@
 <script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
+    // Initialize Tippy.js for all elements with the attribute `data-tippy-content`
+    tippy('[data-tippy-content]', {
+        animation: 'scale', // Animation for the tooltip
+        theme: 'light', // Theme for the tooltip
+        delay: [100, 200], // Show and hide delays in milliseconds
+    });
+</script>
+
+<script>
     const subjects = {{ subjects|safe }};
     const studentsWithGrades = {{ students_with_grades|safe }};
+    let students = [];
 </script>
 
 
@@ -605,7 +620,7 @@
     }
 
     function main() {
-        const students = generateStudents();
+        students = generateStudents();
         calculateResults(students);
         renderTable(students);
         renderStatistics(students);
@@ -613,4 +628,120 @@
 
     main();
 </script>
+<script>
+    function saveResults() {
+        // Prepare funny loading messages
+        const loadingMessages = [
+        "Crossing fingers...",
+        "Converting grades into emojis...",
+        "Making sure they pass... just kidding!",
+        "Contacting the grading wizards...",
+        "Bribing the school bell for more time...",
+        "Fetching coffee for the grader...",
+        "Debating the grade with a calculator...",
+        "Finding an extra 1% just for you...",
+        "Sharpening pencils for extra accuracy...",
+        "Blaming the internet for the delay...",
+        "Wondering if 2 + 2 still equals 4...",
+        "Wishing we had a time machine to fix grades...",
+        "Making sure everything is 100% awesome!",
+        "Throwing confetti because you're almost done!",
+        "Hoping this loading screen makes you smile...",
+        "Calculating... and calculating... and calculating...",
+        "Making sure you're ready for the results party!"
+    ];
+    
+    
+        let messageIndex = 0;
+    
+        // Show the initial loading modal with a rotating message
+        Swal.fire({
+            title: 'Saving Results...',
+            html: `<p id="loading-text">${loadingMessages[messageIndex]}</p>`,
+            allowOutsideClick: false,
+            didOpen: () => {
+                Swal.showLoading();
+    
+                // Change the loading message every 2 seconds
+                const intervalId = setInterval(() => {
+                    messageIndex = (messageIndex + 1) % loadingMessages.length;
+                    document.getElementById('loading-text').textContent = loadingMessages[messageIndex];
+                }, 1000);
+    
+                // Gather student data
+                const studentsData = students.map(student => ({
+                    id: student.id || null,
+                    name: student.name,
+                    grades: student.grades.map(grade => ({
+                        id: grade.id || null,
+                        subject: grade.subject,
+                        score: grade.score !== null ? grade.score : 'Absent',
+                        credit: grade.credit,
+                        rank: grade.rank !== 'N/A' ? grade.rank : 'N/A',
+                        observation: getObservation(grade.score)
+                    })),
+                    creditsAttempted: student.creditsAttempted,
+                    creditsObtained: student.creditsObtained,
+                    totalScore: student.total.toFixed(2),
+                    average: student.average,
+                    remark: student.remark,
+                    rank: student.rank
+                }));
+    
+                // Gather class statistics
+                const classStats = calculateClassStatistics(students).map(stat => ({
+                    subject: stat.subject,
+                    maxScore: stat.maxScore !== null ? stat.maxScore.toFixed(2) : 'None',
+                    minScore: stat.minScore !== null ? stat.minScore.toFixed(2) : 'None',
+                    avgScore: stat.avgScore !== 'N/A' ? stat.avgScore : 'N/A',
+                    numSat: stat.numSat,
+                    numPassed: stat.numPassed,
+                    percentagePassed: stat.percentagePassed !== 'N/A' ? stat.percentagePassed : 'N/A'
+                }));
+    
+                // Gather overall statistics
+                const overallStats = calculateOverallStatistics(students);
+    
+                // Prepare the full payload
+                const payload = {
+                    students: studentsData,
+                    classStats: classStats,
+                    overallStats: overallStats,
+                    academic_year_id: {{ academic_year.id }},
+                    class_id: {{ class_obj.id }},
+                    exam_id: {{ exam.id }}
+                };
+    
+                // Send the data to the backend
+                fetch("{% url 'update_results' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify(payload)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    clearInterval(intervalId);  // Stop the interval when data is saved
+    
+                    if (data.status === 'success') {
+                        Swal.fire('Success', 'Results have been saved successfully!', 'success');
+                    } else {
+                        Swal.fire('Error', 'Failed to save results: ' + data.message, 'error');
+                    }
+                })
+                .catch(error => {
+                    clearInterval(intervalId);  // Stop the interval in case of error
+                    Swal.fire('Error', 'An unexpected error occurred: ' + error, 'error');
+                });
+            }
+        });
+    }
+    
+    // Efficiently attach the saveResults function to the Save button using its id
+    document.getElementById('save-results-btn').addEventListener('click', saveResults);
+    
+</script>
+
 {% endblock %}
