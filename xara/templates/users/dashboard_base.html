@@ -165,21 +165,27 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if 'exam' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'exam_list' %}">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'exam_list' %}active{% endif %}" href="{% url 'exam_list' %}">
                             <i class="bi bi-book-half"></i>
                             <span class="sidebar-text">Single Exams</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if 'general' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'general_exam_list' %}">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'general_exam_list' %}active{% endif %}" href="{% url 'general_exam_list' %}">
                             <i class="bi bi-box-seam"></i>
-                            <span class="sidebar-text">General Exams</span>
+                            <span class="sidebar-text">Group Exams</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if 'manage-results' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'manage_results' %}">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'manage_results' %}active{% endif %}" href="{% url 'manage_results' %}">
                             <i class="bi bi-clipboard"></i>
                             <span class="sidebar-text">Manage Results</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'manage_general_exams' %}  active{% endif %}" href="{% url 'manage_general_exams' %}">
+                            <i class="bi bi-box-seam"></i>
+                            <span class="sidebar-text">Manage Group Exams</span>
                         </a>
                     </li>
                 </ul>

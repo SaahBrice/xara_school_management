@@ -540,51 +540,6 @@ class GeneralExam(models.Model):
     def __str__(self):
         return f"{self.name} - {self.academic_year}"
 
-    def calculate_student_average(self, student):
-        grade_sheets = GradeSheet.objects.filter(
-            student=student,
-            exam__in=self.exams.all(),
-            academic_year=self.academic_year
-        ).annotate(
-            weighted_average=ExpressionWrapper(
-                F('average') * F('exam__generalexamweight__weight'),
-                output_field=DecimalField()
-            )
-        )
-        
-        total_weight = self.exams.aggregate(
-            total_weight=Sum('generalexamweight__weight')
-        )['total_weight'] or 1
-
-        student_average = grade_sheets.aggregate(
-            avg=Sum('weighted_average') / total_weight
-        )['avg'] or 0
-
-        return student_average
-
-    def calculate_subject_averages(self):
-        subject_grades = SubjectGrade.objects.filter(
-            grade_sheet__exam__in=self.exams.all(),
-            grade_sheet__academic_year=self.academic_year
-        ).annotate(
-            weighted_score=ExpressionWrapper(
-                F('score') * F('grade_sheet__exam__generalexamweight__weight'),
-                output_field=DecimalField()
-            )
-        )
-
-        total_weight = self.exams.aggregate(
-            total_weight=Sum('generalexamweight__weight')
-        )['total_weight'] or 1
-
-        subject_averages = subject_grades.values('class_subject__subject__name').annotate(
-            average=Sum('weighted_score') / total_weight,
-            max_score=Max('score'),
-            min_score=Min('score'),
-            num_students=Count('grade_sheet__student', distinct=True)
-        )
-
-        return subject_averages
 
 class GeneralExamWeight(models.Model):
     general_exam = models.ForeignKey(GeneralExam, on_delete=models.CASCADE)
@@ -611,77 +566,6 @@ class GeneralExamGradeSheet(models.Model):
     def __str__(self):
         return f"{self.student.get_full_name()} - {self.general_exam.name} - {self.class_obj.name} - {self.academic_year}"
 
-    def calculate_total_and_average(self, prevent_recursive_save=False):
-        """
-        Calculate and update the total score, credits attempted, credits obtained,
-        average, and remark for this grade sheet.
-        """
-        try:
-            with transaction.atomic():
-                subject_grades = self.subject_grades.all().select_related('class_subject')
-
-                aggregates = subject_grades.aggregate(
-                    total_score=Sum('calculated_score'),
-                    credits_attempted=Sum('class_subject__credit'),
-                    credits_obtained=Sum(Case(
-                        When(calculated_score__gte=10, then=F('class_subject__credit')),
-                        default=0,
-                        output_field=DecimalField()
-                    ))
-                )
-
-                self.total_score = aggregates['total_score'] or 0
-                self.credits_attempted = aggregates['credits_attempted'] or 0
-                self.credits_obtained = aggregates['credits_obtained'] or 0
-
-                if self.credits_attempted > 0:
-                    self.average = self.total_score / self.credits_attempted
-                else:
-                    self.average = Decimal(0.00)
-
-                self.remark = 'PASSED' if float(self.average) >= 10 else 'FAILED'
-
-                # Avoid recursive save calls by using a flag
-                if not prevent_recursive_save:
-                    self.save(prevent_recursive_save=True)
-
-                # Update class statistics (ensure this doesn't cause recursion)
-                GeneralExamClassStatistics.update_statistics(self.general_exam, self.class_obj)
-                GeneralExamOverallStatistics.update_statistics(self.general_exam, self.class_obj)
-        except Exception as e:
-            raise GradeCalculationError(f"Error calculating totals and average: {str(e)}")
-
-    def calculate_rank(self, prevent_recursive_save=False):
-        """
-        Calculate and update the rank for the student within the class.
-        """
-        try:
-            with transaction.atomic():
-                # Logic for calculating rank
-                ranks = GeneralExamGradeSheet.objects.filter(
-                    exam=self.exam,
-                    class_obj=self.class_obj,
-                    academic_year=self.academic_year
-                ).order_by('-total_score')
-
-                rank_map = {gs.id: rank + 1 for rank, gs in enumerate(ranks)}
-                self.rank = rank_map[self.id]
-
-                if not prevent_recursive_save:
-                    self.save(prevent_recursive_save=True)
-        except Exception as e:
-            raise RankCalculationError(f"Error calculating rank: {str(e)}")
-
-@receiver(post_save, sender=GeneralExamGradeSheet)
-def update_general_exam_grade_sheet(sender, instance, created, **kwargs):
-    """
-    Post-save signal to update the grade sheet's totals, averages, and rank after saving.
-    """
-    if not created and not kwargs.get('prevent_recursive_save', False):
-        instance.calculate_total_and_average(prevent_recursive_save=True)
-        instance.calculate_rank(prevent_recursive_save=True)
-
-
 
 
 class GeneralExamSubjectGrade(models.Model):
@@ -696,61 +580,6 @@ class GeneralExamSubjectGrade(models.Model):
 
     def __str__(self):
         return f"{self.grade_sheet.student.get_full_name()} - {self.class_subject.subject.name} - Score: {self.calculated_score}"
-
-    def save(self, *args, **kwargs):
-        with transaction.atomic():
-            prevent_recursive_save = kwargs.pop('prevent_recursive_save', False)
-            if not prevent_recursive_save:
-                # Calculate score only if recursion is not being prevented
-                self.calculate_score()
-            self.set_observation()
-            super().save(*args, **kwargs)
-            if not kwargs.get('prevent_recursive_save', False):
-                self.calculate_rank(prevent_recursive_save=True)
-                self.grade_sheet.calculate_total_and_average(prevent_recursive_save=True)
-
-    def calculate_score(self):
-        subject_grades = SubjectGrade.objects.filter(
-            grade_sheet__student=self.grade_sheet.student,
-            grade_sheet__exam__in=self.grade_sheet.general_exam.exams.all(),
-            class_subject=self.class_subject
-        ).annotate(
-            weighted_score=ExpressionWrapper(
-                F('score') * F('grade_sheet__exam__generalexamweight__weight'),
-                output_field=DecimalField()
-            )
-        )
-
-        total_weight = self.grade_sheet.general_exam.exams.aggregate(
-            total_weight=Sum('generalexamweight__weight')
-        )['total_weight'] or 1
-
-        self.calculated_score = subject_grades.aggregate(
-            avg=Sum('weighted_score') / total_weight
-        )['avg'] or 0
-
-        self.set_observation()
-
-    def set_observation(self):
-        grading_system = self.grade_sheet.student.school.settings.grading_system
-        for grade, range_info in grading_system.items():
-            if range_info['min'] <= self.calculated_score <= range_info['max']:
-                self.observation = range_info['description']
-                break
-
-    def calculate_rank(self, prevent_recursive_save=True):
-        with transaction.atomic():
-            subject_grades = GeneralExamSubjectGrade.objects.filter(
-                grade_sheet__general_exam=self.grade_sheet.general_exam,
-                grade_sheet__class_obj=self.grade_sheet.class_obj,
-                class_subject=self.class_subject
-            ).order_by('-calculated_score')
-            
-            rank_mapping = {grade.id: rank + 1 for rank, grade in enumerate(subject_grades)}
-            self.rank = rank_mapping[self.id]
-            
-            if not prevent_recursive_save:
-                self.save(prevent_recursive_save=True)
 
 
 
@@ -771,37 +600,6 @@ class GeneralExamClassStatistics(models.Model):
     def __str__(self):
         return f"{self.class_subject.subject.name} - {self.class_obj.name} - {self.general_exam.name}"
 
-    @classmethod
-    def update_statistics(cls, general_exam, class_obj):
-        with transaction.atomic():
-            for class_subject in class_obj.subjects.all():
-                subject_grades = GeneralExamSubjectGrade.objects.filter(
-                    grade_sheet__general_exam=general_exam,
-                    grade_sheet__class_obj=class_obj,
-                    class_subject=class_subject
-                )
-                stats = subject_grades.aggregate(
-                    max_score=Max('calculated_score'),
-                    min_score=Min('calculated_score'),
-                    avg_score=Avg('calculated_score'),
-                    num_students=Count('id'),
-                    num_passed=Count('id', filter=Q(calculated_score__gte=10))
-                )
-                stats['percentage_passed'] = (stats['num_passed'] / stats['num_students']) * 100 if stats['num_students'] > 0 else 0
-                                # Ensure all required fields have default values
-                stats['max_score'] = stats['max_score'] or Decimal('0.00')
-                stats['min_score'] = stats['min_score'] or Decimal('0.00')
-                stats['avg_score'] = stats['avg_score'] or Decimal('0.00')
-                stats['num_students'] = stats['num_students'] or 0
-                stats['num_passed'] = stats['num_passed'] or 0
-                stats['percentage_passed'] = (stats['num_passed'] / stats['num_students']) * 100 if stats['num_students'] > 0 else Decimal('0.00')
-
-                cls.objects.update_or_create(
-                    general_exam=general_exam,
-                    class_obj=class_obj,
-                    class_subject=class_subject,
-                    defaults=stats
-                )
 
 class GeneralExamOverallStatistics(models.Model):
     general_exam = models.ForeignKey(GeneralExam, on_delete=models.CASCADE, related_name='overall_statistics')
@@ -817,50 +615,7 @@ class GeneralExamOverallStatistics(models.Model):
     def __str__(self):
         return f"Overall Stats - {self.class_obj.name} - {self.general_exam.name}"
 
-    @classmethod
-    def update_statistics(cls, general_exam, class_obj):
-        with transaction.atomic():
-            grade_sheets = GeneralExamGradeSheet.objects.filter(
-                general_exam=general_exam,
-                class_obj=class_obj
-            )
-            stats = grade_sheets.aggregate(
-                num_students=Count('id'),
-                num_passes=Count('id', filter=Q(average__gte=10)),
-                class_average=Avg('average')
-            )
-            stats['overall_percentage_pass'] = (stats['num_passes'] / stats['num_students']) * 100 if stats['num_students'] > 0 else 0
 
-            cls.objects.update_or_create(
-                general_exam=general_exam,
-                class_obj=class_obj,
-                defaults=stats
-            )
-
-def get_cached_class_statistics(exam, class_obj, class_subject):
-    cache_key = f'class_stats_{exam.id}_{class_obj.id}_{class_subject.id}'
-    stats = cache.get(cache_key)
-    if not stats:
-        stats = ClassStatistics.objects.filter(
-            exam=exam,
-            class_obj=class_obj,
-            class_subject=class_subject
-        ).first()
-        if stats:
-            cache.set(cache_key, stats, timeout=3600)  # Cache for 1 hour
-    return stats
-
-def get_cached_overall_statistics(exam, class_obj):
-    cache_key = f'overall_stats_{exam.id}_{class_obj.id}'
-    stats = cache.get(cache_key)
-    if not stats:
-        stats = OverallStatistics.objects.filter(
-            exam=exam,
-            class_obj=class_obj
-        ).first()
-        if stats:
-            cache.set(cache_key, stats, timeout=3600)  # Cache for 1 hour
-    return stats
 
 
 
