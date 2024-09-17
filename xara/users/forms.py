@@ -1,7 +1,7 @@
 import json
 from django import forms
 from django.contrib.auth import get_user_model
-from result_system.models import AcademicYear, Exam, GeneralExam, Student, StudentDocument, StudentSubject, SystemSettings, Teacher, Class, Subject, ClassSubject
+from result_system.models import AcademicYear, AnnualExam, Exam, GeneralExam, Student, StudentDocument, StudentSubject, SystemSettings, Teacher, Class, Subject, ClassSubject
 from django.db import transaction
 
 
@@ -269,8 +269,19 @@ class GeneralExamForm(forms.ModelForm):
         fields = ['name', 'academic_year', 'exams', 'start_date', 'end_date']
 
 
+class AnnualExamForm(forms.ModelForm):
+    class Meta:
+        model = AnnualExam
+        fields = ['name', 'academic_year', 'general_exams', 'start_date', 'end_date']
+
+
 
 class ExamSelectionForm(forms.Form):
     exam = forms.ModelChoiceField(queryset=Exam.objects.all())
+    class_subject = forms.ModelChoiceField(queryset=ClassSubject.objects.all())
+
+
+class GeneralExamSelectionForm(forms.Form):
+    general_exam = forms.ModelChoiceField(queryset=GeneralExam.objects.all())
     class_subject = forms.ModelChoiceField(queryset=ClassSubject.objects.all())
 

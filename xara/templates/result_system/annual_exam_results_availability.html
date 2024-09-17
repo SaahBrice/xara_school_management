@@ -1,8 +1,8 @@
 {% extends "users/dashboard_base.html" %}
 {% load static %}
 
-{% block title %}Group Results management{% endblock %}
-{% block page_title %}Group Results management{% endblock %}
+{% block title %}Annual Results management{% endblock %}
+{% block page_title %}Annual Results management{% endblock %}
 {% block extra_css %}
 <style>
     body {
@@ -76,14 +76,14 @@
             <div class="card">
                 <div class="card-body">
                     <h5 class="card-title">Exam</h5>
-                    <p class="card-text">{{ general_exam.name }}</p>
+                    <p class="card-text">{{ annual_exam.name }}</p>
                 </div>
             </div>
         </div>
     </div>
 </div>
 <div class="alert alert-warning my-4 " role="alert">
-    Save these processed results if this is your first time accessing them. Editing results here are possible only for printing purposes, hence they are not saved to the database given that group exams results depend on the individual exams results.
+    Save these processed results if this is your first time accessing them. Editing results here are possible only for printing purposes, hence they are not saved to the database given that annual exams results depend on the individual group results.
 </div>
 
     <div class="">
@@ -745,11 +745,11 @@
                     overallStats: overallStats,
                     academic_year_id: {{ academic_year.id }},
                     class_id: {{ class_obj.id }},
-                    general_exam_id: {{ general_exam.id }}
+                    annual_exam_id: {{ annual_exam.id }}
                 };
     
                 // Send the data to the backend
-                fetch("{% url 'update_general_results' %}", {
+                fetch("{% url 'update_annual_results' %}", {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

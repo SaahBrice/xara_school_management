@@ -177,6 +177,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'annual_exam_list' %}active{% endif %}" href="{% url 'annual_exam_list' %}">
+                            <i class="bi bi-body-text"></i>
+                            <span class="sidebar-text">Annual Exams handler</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link {% if request.resolver_match.url_name == 'manage_results' %}active{% endif %}" href="{% url 'manage_results' %}">
                             <i class="bi bi-clipboard"></i>
                             <span class="sidebar-text">Manage Results</span>
@@ -186,6 +192,12 @@
                         <a class="nav-link {% if request.resolver_match.url_name == 'manage_general_exams' %}  active{% endif %}" href="{% url 'manage_general_exams' %}">
                             <i class="bi bi-box-seam"></i>
                             <span class="sidebar-text">Manage Group Exams</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'manage_annual_exams' %}  active{% endif %}" href="{% url 'manage_annual_exams' %}">
+                            <i class="bi bi-body-text"></i>
+                            <span class="sidebar-text">Manage Annual Exams </span>
                         </a>
                     </li>
                 </ul>

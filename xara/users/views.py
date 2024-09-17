@@ -5,10 +5,10 @@ from django.views.generic import TemplateView, RedirectView, FormView
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.shortcuts import redirect, get_object_or_404
-from result_system.models import AcademicYear, ClassSubject, Exam, GeneralExam, GradeSheet, StudentSubject, Subject, SubjectGrade, SystemSettings, Teacher, Class, Student, TeacherSubject, User,ClassStatistics, OverallStatistics
+from result_system.models import AcademicYear, AnnualExam, ClassSubject, Exam, GeneralExam, GradeSheet, StudentSubject, Subject, SubjectGrade, SystemSettings, Teacher, Class, Student, TeacherSubject, User,ClassStatistics, OverallStatistics
 from django.views.generic import ListView
 from django.views.generic import DetailView, ListView, CreateView, UpdateView, DeleteView
-from .forms import AcademicYearForm, AssignSubjectForm, ClassForm, ExamForm, GeneralExamForm, StudentDocumentFormSet, StudentForm, StudentSubjectForm, SubjectForm, SystemSettingsForm, TeacherForm
+from .forms import AcademicYearForm, AnnualExamForm, AssignSubjectForm, ClassForm, ExamForm, GeneralExamForm, StudentDocumentFormSet, StudentForm, StudentSubjectForm, SubjectForm, SystemSettingsForm, TeacherForm
 from .mixins import SecretaryRequiredMixin
 from django.db.models import Prefetch
 from django.db import transaction
@@ -733,6 +733,44 @@ class GeneralExamDeleteView(DeleteView):
 
     def delete(self, request, *args, **kwargs):
         messages.success(self.request, 'General Exam deleted successfully.')
+        return super().delete(request, *args, **kwargs)
+
+
+
+
+class AnnualExamListView(ListView):
+    model = AnnualExam
+    template_name = 'users/annual_exam_list.html'
+    context_object_name = 'annual_exams'
+
+class AnnualExamCreateView(CreateView):
+    model = AnnualExam
+    form_class = AnnualExamForm
+    template_name = 'users/annual_exam_form.html'
+    success_url = reverse_lazy('annual_exam_list')
+
+    def form_valid(self, form):
+        form.instance.school = self.request.user.school
+        messages.success(self.request, 'Annual Exam Statistics handler created successfully.')
+        return super().form_valid(form)
+
+class AnnualExamUpdateView(UpdateView):
+    model = AnnualExam
+    form_class = AnnualExamForm
+    template_name = 'users/annual_exam_form.html'
+    success_url = reverse_lazy('annual_exam_list')
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Annual Exam handler updated successfully.')
+        return super().form_valid(form)
+
+class AnnualExamDeleteView(DeleteView):
+    model = AnnualExam
+    template_name = 'users/annual_exam_confirm_delete.html'
+    success_url = reverse_lazy('annual_exam_list')
+
+    def delete(self, request, *args, **kwargs):
+        messages.success(self.request, 'annual Exam handler deleted successfully.')
         return super().delete(request, *args, **kwargs)
 
 

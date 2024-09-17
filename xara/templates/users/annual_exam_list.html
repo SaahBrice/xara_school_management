@@ -1,0 +1,44 @@
+{% extends "users/dashboard_base.html" %}
+{% block title %}Annual Results - Xara School Management System{% endblock %}
+{% block page_title %}Annual Results{% endblock %}
+{% block dashboard_content %}
+
+<div class="row mb-3">
+    <div class="col-12">
+        <a href="{% url 'annual_exam_create' %}" class="btn btn-primary">Add Annual Exam handler</a>
+    </div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Academic Year</th>
+                <th>Start Date</th>
+                <th>End Date</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for general_exam in annual_exams %}
+            <tr>
+                <td>{{ general_exam.name }}</td>
+                <td>{{ general_exam.academic_year }}</td>
+                <td>{{ general_exam.start_date }}</td>
+                <td>{{ general_exam.end_date }}</td>
+                <td>
+                    <a href="{% url 'annual_exam_update' general_exam.pk %}" class="btn btn-sm btn-secondary">Edit</a>
+                    <a href="{% url 'annual_exam_delete' general_exam.pk %}" class="btn btn-sm btn-danger">Delete</a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5">No general exams found.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% endblock dashboard_content %}

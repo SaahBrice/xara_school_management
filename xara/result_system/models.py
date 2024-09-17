@@ -555,6 +555,8 @@ class GeneralExamGradeSheet(models.Model):
     general_exam = models.ForeignKey(GeneralExam, on_delete=models.CASCADE, related_name='grade_sheets')
     class_obj = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='general_exam_grade_sheets')
     academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name='general_exam_grade_sheets')
+    credits_attempted = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    credits_obtained = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     total_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
     average = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
     rank = models.PositiveIntegerField(blank=True, null=True)
@@ -587,12 +589,13 @@ class GeneralExamClassStatistics(models.Model):
     general_exam = models.ForeignKey(GeneralExam, on_delete=models.CASCADE, related_name='class_statistics')
     class_obj = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='general_exam_class_statistics')
     class_subject = models.ForeignKey(ClassSubject, on_delete=models.CASCADE, related_name='general_exam_statistics')
-    max_score = models.DecimalField(max_digits=4, decimal_places=2)
-    min_score = models.DecimalField(max_digits=4, decimal_places=2)
-    avg_score = models.DecimalField(max_digits=4, decimal_places=2)
-    num_students = models.PositiveIntegerField()
-    num_passed = models.PositiveIntegerField()
-    percentage_passed = models.DecimalField(max_digits=5, decimal_places=2)
+    academic_year = models.ForeignKey('AcademicYear', on_delete=models.CASCADE, related_name='general_exam_class_statistics_year', null=True)
+    max_score = models.DecimalField(max_digits=4, decimal_places=2,null=True)
+    min_score = models.DecimalField(max_digits=4, decimal_places=2,null=True)
+    avg_score = models.DecimalField(max_digits=4, decimal_places=2,null=True)
+    num_students = models.PositiveIntegerField(null=True)
+    num_passed = models.PositiveIntegerField(null=True)
+    percentage_passed = models.DecimalField(max_digits=5, decimal_places=2,null=True)
 
     class Meta:
         unique_together = ('general_exam', 'class_obj', 'class_subject')
@@ -604,16 +607,118 @@ class GeneralExamClassStatistics(models.Model):
 class GeneralExamOverallStatistics(models.Model):
     general_exam = models.ForeignKey(GeneralExam, on_delete=models.CASCADE, related_name='overall_statistics')
     class_obj = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='general_exam_overall_statistics')
-    num_students = models.PositiveIntegerField()
-    num_passes = models.PositiveIntegerField()
-    class_average = models.DecimalField(max_digits=4, decimal_places=2)
-    overall_percentage_pass = models.DecimalField(max_digits=5, decimal_places=2)
+    academic_year = models.ForeignKey('AcademicYear', on_delete=models.CASCADE, related_name='general_exam_overall_statistics_year', null=True)
+    num_students = models.PositiveIntegerField(null=True)
+    num_passes = models.PositiveIntegerField(null=True)
+    class_average = models.DecimalField(max_digits=4, decimal_places=2,null=True)
+    overall_percentage_pass = models.DecimalField(max_digits=5, decimal_places=2,null=True)
 
     class Meta:
         unique_together = ('general_exam', 'class_obj')
 
     def __str__(self):
         return f"Overall Stats - {self.class_obj.name} - {self.general_exam.name}"
+
+
+
+
+
+
+
+
+class AnnualExam(models.Model):
+    school = models.ForeignKey(School, on_delete=models.CASCADE, related_name='annual_exams')
+    name = models.CharField(max_length=100, default="Annual Results")
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name='annual_exams')
+    general_exams = models.ManyToManyField(GeneralExam, related_name='annual_exams', through='AnnualExamWeight')
+    start_date = models.DateTimeField()
+    end_date = models.DateTimeField()
+    total_coefficient = models.DecimalField(max_digits=5, decimal_places=2, default=1.00)
+
+    class Meta:
+        unique_together = ('school', 'name', 'academic_year')
+
+    def __str__(self):
+        return f"{self.name} - {self.academic_year}"
+
+
+class AnnualExamWeight(models.Model):
+    annual_exam = models.ForeignKey(AnnualExam, on_delete=models.CASCADE)
+    general_exam = models.ForeignKey(GeneralExam, on_delete=models.CASCADE)
+    weight = models.DecimalField(max_digits=3, decimal_places=2, default=1.00,
+                                 validators=[MinValueValidator(0), MaxValueValidator(1)])
+
+    class Meta:
+        unique_together = ('annual_exam', 'general_exam')
+
+class AnnualExamGradeSheet(models.Model):
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='annual_exam_grade_sheets')
+    annual_exam = models.ForeignKey(AnnualExam, on_delete=models.CASCADE, related_name='grade_sheets')
+    class_obj = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='annual_exam_grade_sheets')
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.CASCADE, related_name='annual_exam_grade_sheets')
+    credits_attempted = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    credits_obtained = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    total_score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
+    average = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
+    rank = models.PositiveIntegerField(blank=True, null=True)
+    remark = models.CharField(max_length=20, blank=True)
+
+    class Meta:
+        unique_together = ('student', 'annual_exam', 'class_obj', 'academic_year')
+
+    def __str__(self):
+        return f"{self.student.get_full_name()} - {self.annual_exam.name} - {self.class_obj.name} - {self.academic_year}"
+
+
+
+class AnnualExamSubjectGrade(models.Model):
+    grade_sheet = models.ForeignKey(AnnualExamGradeSheet, on_delete=models.CASCADE, related_name='subject_grades')
+    class_subject = models.ForeignKey(ClassSubject, on_delete=models.CASCADE, related_name='annual_exam_grades')
+    calculated_score = models.DecimalField(max_digits=4, decimal_places=2, null=True, blank=True)
+    rank = models.PositiveIntegerField(null=True, blank=True)
+    observation = models.CharField(max_length=50, blank=True)
+
+    class Meta:
+        unique_together = ('grade_sheet', 'class_subject')
+
+    def __str__(self):
+        return f"{self.grade_sheet.student.get_full_name()} - {self.class_subject.subject.name} - Score: {self.calculated_score}"
+
+
+
+class AnnualExamClassStatistics(models.Model):
+    annual_exam = models.ForeignKey(AnnualExam, on_delete=models.CASCADE, related_name='class_statistics')
+    class_obj = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='annual_exam_class_statistics')
+    class_subject = models.ForeignKey(ClassSubject, on_delete=models.CASCADE, related_name='annual_exam_statistics')
+    academic_year = models.ForeignKey('AcademicYear', on_delete=models.CASCADE, related_name='annual_exam_class_statistics_year', null=True)
+    max_score = models.DecimalField(max_digits=4, decimal_places=2,null=True)
+    min_score = models.DecimalField(max_digits=4, decimal_places=2,null=True)
+    avg_score = models.DecimalField(max_digits=4, decimal_places=2,null=True)
+    num_students = models.PositiveIntegerField(null=True)
+    num_passed = models.PositiveIntegerField(null=True)
+    percentage_passed = models.DecimalField(max_digits=5, decimal_places=2,null=True)
+
+    class Meta:
+        unique_together = ('annual_exam', 'class_obj', 'class_subject')
+
+    def __str__(self):
+        return f"{self.class_subject.subject.name} - {self.class_obj.name} - {self.annual_exam.name}"
+
+
+class AnnualExamOverallStatistics(models.Model):
+    annual_exam = models.ForeignKey(AnnualExam, on_delete=models.CASCADE, related_name='overall_statistics')
+    class_obj = models.ForeignKey(Class, on_delete=models.CASCADE, related_name='annual_exam_overall_statistics')
+    academic_year = models.ForeignKey('AcademicYear', on_delete=models.CASCADE, related_name='annual_exam_overall_statistics_year', null=True)
+    num_students = models.PositiveIntegerField(null=True)
+    num_passes = models.PositiveIntegerField(null=True)
+    class_average = models.DecimalField(max_digits=4, decimal_places=2,null=True)
+    overall_percentage_pass = models.DecimalField(max_digits=5, decimal_places=2,null=True)
+
+    class Meta:
+        unique_together = ('annual_exam', 'class_obj')
+
+    def __str__(self):
+        return f"Overall Stats - {self.class_obj.name} - {self.annual_exam.name}"
 
 
 
