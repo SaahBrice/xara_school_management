@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import (
-    School, SystemSettings, AcademicYear, Class, Subject, ClassSubject,
+    ExtraExamData, School, SystemSettings, AcademicYear, Class, Subject, ClassSubject,
     User, Teacher, TeacherSubject, Student, StudentDocument, StudentSubject,
     Exam, GradeSheet, SubjectGrade, ClassStatistics, OverallStatistics,
     GeneralExam, GeneralExamWeight, GeneralExamGradeSheet, GeneralExamSubjectGrade,
@@ -158,3 +158,27 @@ class GeneralExamClassStatisticsAdmin(admin.ModelAdmin):
 class GeneralExamOverallStatisticsAdmin(admin.ModelAdmin):
     list_display = ('general_exam', 'class_obj', 'num_students', 'num_passes', 'class_average', 'overall_percentage_pass')
     list_filter = ('general_exam', 'class_obj')
+
+
+@admin.register(ExtraExamData)
+class ExtraExamDataAdmin(admin.ModelAdmin):
+    list_display = ('student', 'academic_year', 'class_obj', 'general_exam', 'absences', 'conduct', 'human_investment', 'fees_owed', 'participation_in_extracurricular')
+    list_filter = ('academic_year', 'class_obj', 'general_exam', 'conduct', 'human_investment')
+    search_fields = ('student__first_name', 'student__last_name', 'student__matricula_code')
+
+    fieldsets = (
+        ('Student and Exam Information', {
+            'fields': ('academic_year', 'class_obj', 'general_exam', 'student')
+        }),
+        ('Performance and Conduct', {
+            'fields': ('absences', 'conduct', 'human_investment', 'fees_owed', 'participation_in_extracurricular')
+        }),
+        ('Remarks', {
+            'fields': ('remarks',)
+        }),
+    )
+
+    def get_student_name(self, obj):
+        return obj.student.get_full_name()
+    get_student_name.short_description = 'Student Name'
+

@@ -1,0 +1,95 @@
+{% extends "users/dashboard_base.html" %}
+{% load static %}
+
+{% block title %}Manage General Exams{% endblock %}
+{% block page_title %}Manage General Exams{% endblock %}
+{% block dashboard_content %}
+<div class="alert alert-primary my-4 " role="alert">
+    Select from the fields below the academic year, class, and general exam to manage the Extra data;
+</div>
+<form id="generalExamSelectionForm" method="POST">
+    {% csrf_token %}
+    <div class="form-group">
+        <label for="academicYear">Academic Year:</label>
+        <select id="academicYear" name="academic_year" class="form-control">
+            <option value="">Select Academic Year</option>
+            {% for year in academic_years %}
+                <option value="{{ year.id }}">{{ year.year }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="class">Class:</label>
+        <select id="class" name="class" class="form-control" disabled>
+            <option value="">Select Class</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="generalExam">General Exam:</label>
+        <select id="generalExam" name="general_exam" class="form-control" disabled>
+            <option value="">Select General Exam</option>
+        </select>
+    </div>
+
+    <button type="submit" id="manageButton" class="btn btn-primary mt-4 px-4" style="display: none;">Manage</button>
+</form>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@10"></script>
+<script>
+    $(document).ready(function() {
+        function updateSelectOptions(selectId, options) {
+            var $select = $(selectId);
+            $select.empty().append('<option value="">Select</option>');
+            $.each(options, function(index, option) {
+                $select.append($('<option></option>').attr('value', option.id).text(option.name));
+            });
+            $select.prop('disabled', false);
+        }
+
+        function resetSelects(selectIds) {
+            $.each(selectIds, function(index, selectId) {
+                $(selectId).empty().append('<option value="">Select</option>').prop('disabled', true);
+            });
+        }
+
+        function checkAllSelected() {
+            return $('#academicYear').val() && $('#class').val() && $('#generalExam').val();
+        }
+
+        function toggleManageButton() {
+            if (checkAllSelected()) {
+                $('#manageButton').show();
+            } else {
+                $('#manageButton').hide();
+            }
+        }
+
+        $('#academicYear').change(function() {
+            var academicYearId = $(this).val();
+            if (academicYearId) {
+                $.get("{% url 'get_classes' %}", {academic_year: academicYearId}, function(data) {
+                    updateSelectOptions('#class', data);
+                });
+                $.get("{% url 'get_general_exams' %}", {academic_year: academicYearId}, function(data) {
+                    updateSelectOptions('#generalExam', data);
+                });
+            } else {
+                resetSelects(['#class', '#generalExam']);
+            }
+            toggleManageButton();
+        });
+
+        $('#class, #generalExam').change(function() {
+            toggleManageButton();
+        });
+
+        // Initial check
+        toggleManageButton();
+    });
+</script>
+{% endblock %}

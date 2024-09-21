@@ -1,0 +1,356 @@
+{% extends "users/dashboard_base.html" %}
+{% load static %}
+
+{% block title %}Extra Exam Data Management{% endblock %}
+{% block page_title %}Extra Exam Data Management{% endblock %}
+
+{% block extra_css %}
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+    }
+    .gridjs-td, .gridjs-th {
+        padding: 8px;
+        font-size: 12px;
+    }
+    .clickable-cell {
+        color: blue;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    .statistics-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    .statistics-table th, .statistics-table td {
+        border: 1px solid #e7e6e6;
+        padding: 4px;
+        text-align: left;
+    }
+    .statistics-table th {
+        background-color: #fdfdfd;
+    }
+</style>
+{% endblock %}
+
+{% block dashboard_content %}
+<div class=" mt-4">
+    <!-- Academic Year, Class, and Exam Information -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Academic Year</h5>
+                    <p class="card-text">{{ academic_year.year }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Class</h5>
+                    <p class="card-text">{{ class_obj.name }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">General Exam</h5>
+                    <p class="card-text">{{ general_exam.name }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Action Buttons (Save, Cancel, Export) -->
+<div class="mb-3">
+    <div class="btn-group" role="group" aria-label="Action buttons">
+        <!-- Cancel Button -->
+        <button id="cancel-btn" class="btn btn-outline-secondary">
+            <i class="fas fa-times-circle"></i> Cancel
+        </button>
+        <!-- Export to Excel Button -->
+        <button id="export-excel-btn" class="btn btn-outline-warning mx-2">
+            <i class="fas fa-file-excel"></i> Export to Excel
+        </button>
+        <!-- Export to PDF Button -->
+        <button id="export-pdf-btn" class="btn btn-outline-success mx-2">
+            <i class="fas fa-file-pdf"></i> Export to PDF
+        </button>
+        <!-- Save Button -->
+        <button id="save-results-btn" class="btn btn-outline-primary ms-2">
+            <i class="fas fa-save"></i> Save All Changes
+        </button>
+    </div>
+</div>
+
+<!-- Table Section -->
+<div class="mb-4">
+    <h5 class="mb-3">Extra Exam Data</h5>
+    <div id="extraExamTable"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/gridjs/dist/gridjs.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<script>
+// Data from Django context
+const extraExamData = {{ extra_exam_data|safe }};
+let studentsData = [];
+let editedData = {};  // To track changes
+
+// Generate students data with editable fields
+function generateExtraExamData() {
+    return extraExamData.map(entry => ({
+        student: entry.student.name,
+        absences: entry.absences,
+        conduct: entry.conduct,
+        human_investment: entry.human_investment,
+        fees_owed: entry.fees_owed,
+        participation: entry.participation_in_extracurricular ? 'Yes' : 'No',
+        remarks: entry.remarks,
+    }));
+}
+let grid;
+// Function to render the table with editable cells
+function renderTable(studentsData) {
+    document.getElementById("extraExamTable").innerHTML = "";
+
+    grid = new gridjs.Grid({
+        columns: [
+            { name: "Student Name", width: "200px" },
+            { 
+                name: "Absences", 
+                width: "120px",
+                formatter: (cell, row) => gridjs.html(`
+                    <span class="clickable-grade" data-student="${row.cells[0].data}" data-field="absences">
+                        ${cell}
+                    </span>
+                `)
+            },
+            { 
+                name: "Conduct", 
+                width: "120px",
+                formatter: (cell, row) => gridjs.html(`
+                    <span class="clickable-grade" data-student="${row.cells[0].data}" data-field="conduct">
+                        ${cell}
+                    </span>
+                `)
+            },
+            { 
+                name: "Human Investment", 
+                width: "150px",
+                formatter: (cell, row) => gridjs.html(`
+                    <span class="clickable-grade" data-student="${row.cells[0].data}" data-field="human_investment">
+                        ${cell}
+                    </span>
+                `)
+            },
+            { 
+                name: "Fees Owed (CFA)", 
+                width: "150px",
+                formatter: (cell, row) => gridjs.html(`
+                    <span class="clickable-grade" data-student="${row.cells[0].data}" data-field="fees_owed">
+                        ${cell}
+                    </span>
+                `)
+            },
+            { 
+                name: "Participation", 
+                width: "150px",
+                formatter: (cell, row) => gridjs.html(`
+                    <span class="clickable-grade" data-student="${row.cells[0].data}" data-field="participation">
+                        ${cell}
+                    </span>
+                `)
+            },
+            { 
+                name: "Remarks", 
+                width: "250px",
+                formatter: (cell, row) => gridjs.html(`
+                    <span class="clickable-grade" data-student="${row.cells[0].data}" data-field="remarks">
+                        ${cell}
+                    </span>
+                `)
+            }
+        ],
+        data: studentsData.map(student => [
+            student.student,
+            student.absences,
+            student.conduct,
+            student.human_investment,
+            student.fees_owed,
+            student.participation,
+            student.remarks,
+        ]),
+        pagination: false,
+        sort: true,
+        search: true,
+        width: '100%',
+        height: '100%',
+        fixedHeader: true
+    });
+
+    grid.render(document.getElementById("extraExamTable"));
+
+    // Add click listener to cells with the class "clickable-grade"
+    document.getElementById("extraExamTable").addEventListener("click", function (event) {
+        if (event.target.classList.contains("clickable-grade")) {
+            const studentName = event.target.getAttribute("data-student");
+            const field = event.target.getAttribute("data-field");
+            const currentValue = event.target.textContent.trim();
+
+            editField(studentName, field, currentValue);
+        }
+    });
+}
+
+// SweetAlert to edit the field
+// SweetAlert to edit the field
+function editField(studentName, field, currentValue) {
+    let inputOptions = null;
+    let inputType = 'text';
+    let inputValue = currentValue;
+
+    // Set different input types based on the field
+    if (field === "conduct" || field === "human_investment") {
+        inputOptions = {
+            5: 'Excellent',
+            4: 'Very Good',
+            3: 'Satisfactory',
+            2: 'Unsatisfactory',
+            1: 'Poor'
+        };
+        inputType = 'select';
+    } else if (field === "participation") {
+        inputOptions = { Yes: 'Yes', No: 'No' };
+        inputType = 'select';
+    } else if (field === "absences" || field === "fees_owed") {
+        inputType = 'number';
+    }
+
+    Swal.fire({
+        title: `Edit ${field.replace('_', ' ')} for ${studentName}`,
+        input: inputType,
+        inputValue: inputValue,
+        inputOptions: inputOptions,
+        showCancelButton: true,
+        confirmButtonText: 'Save',
+        preConfirm: (newValue) => {
+            if (inputType === 'number' && (newValue === '' || isNaN(newValue))) {
+                Swal.showValidationMessage('Please enter a valid number');
+                return false;
+            }
+            return newValue;
+        }
+    }).then(result => {
+        if (result.isConfirmed) {
+            // Update student data with the new value
+            const student = studentsData.find(s => s.student === studentName);
+            student[field] = result.value;
+
+            // Track changes in the editedData object
+            editedData[studentName] = {
+                ...student,
+                [field]: result.value
+            };
+
+            // Re-render the table with the updated data
+            grid.updateConfig({
+                data: studentsData.map(student => [
+                    student.student,
+                    student.absences,
+                    student.conduct,
+                    student.human_investment,
+                    student.fees_owed,
+                    student.participation,
+                    student.remarks
+                ])
+            }).forceRender();
+        }
+    });
+}
+
+// Final save function to send changes to the server
+function saveResults() {
+    if (Object.keys(editedData).length === 0) {
+        Swal.fire('No Changes', 'There are no changes to save.', 'info');
+        return;
+    }
+
+    Swal.fire({
+        title: 'Saving Changes...',
+        allowOutsideClick: false,
+        didOpen: () => {
+            Swal.showLoading();
+
+            // Send updated data to the server
+            fetch("{% url 'update_extra_exam_data' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    updated_data: editedData,
+                    academic_year_id: {{ academic_year.id }},
+                    class_id: {{ class_obj.id }},
+                    general_exam_id: {{ general_exam.id }}
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    Swal.fire('Success', 'Changes saved successfully!', 'success');
+                    editedData = {};  // Reset changes tracking
+                } else {
+                    Swal.fire('Error', 'Failed to save changes.', 'error');
+                }
+            })
+            .catch(error => {
+                Swal.fire('Error', 'An unexpected error occurred.', 'error');
+            });
+        }
+    });
+}
+
+// Initialize students data and render table
+studentsData = generateExtraExamData();
+renderTable(studentsData);
+
+// Attach save function to the save button
+document.getElementById('save-results-btn').addEventListener('click', saveResults);
+
+// Cancel function to reload the page (discard all changes)
+document.getElementById('cancel-btn').addEventListener('click', function () {
+    Swal.fire({
+        title: 'Are you sure?',
+        text: "All changes will be lost!",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Yes, discard changes!',
+        cancelButtonText: 'No, keep editing'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            location.reload();  // Reload the page to discard changes
+        }
+    });
+});
+
+// Export to Excel (placeholder for now, functionality to be added)
+document.getElementById('export-excel-btn').addEventListener('click', function () {
+    Swal.fire('Export to Excel', 'Export functionality to be implemented.', 'info');
+});
+
+// Export to PDF (placeholder for now, functionality to be added)
+document.getElementById('export-pdf-btn').addEventListener('click', function () {
+    Swal.fire('Export to PDF', 'Export functionality to be implemented.', 'info');
+});
+</script>
+{% endblock %}

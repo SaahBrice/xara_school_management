@@ -2,7 +2,7 @@ import json
 from django.shortcuts import render, redirect
 from django.views import View
 from django.http import JsonResponse
-from .models import AcademicYear, AnnualExam, AnnualExamClassStatistics, AnnualExamGradeSheet, AnnualExamOverallStatistics, AnnualExamSubjectGrade, Class, ClassSubject, Exam, GeneralExam, GeneralExamClassStatistics, GeneralExamGradeSheet, GeneralExamOverallStatistics, GeneralExamSubjectGrade, GradeSheet, Student, SubjectGrade, ClassStatistics, OverallStatistics, TeacherSubject
+from .models import AcademicYear, AnnualExam, AnnualExamClassStatistics, AnnualExamGradeSheet, AnnualExamOverallStatistics, AnnualExamSubjectGrade, Class, ClassSubject, Exam, ExtraExamData, GeneralExam, GeneralExamClassStatistics, GeneralExamGradeSheet, GeneralExamOverallStatistics, GeneralExamSubjectGrade, GradeSheet, Student, SubjectGrade, ClassStatistics, OverallStatistics, TeacherSubject
 from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
 from django.db.models import Prefetch
@@ -10,6 +10,9 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
 from django.db.models import Value
 from django.db.models.functions import Concat
+from django.utils.decorators import method_decorator
+
+
 
 class ManageResultsView(View):
     template_name = 'result_system/manage_results.html'
@@ -225,6 +228,10 @@ class ResultsAvailabilityView(View):
 
 
 
+
+
+
+
 def parse_value(value, expected_type='decimal'):
     """
     Helper function to convert 'Absent', 'N/A', 'None', or null values to appropriate data types.
@@ -385,6 +392,36 @@ class ManageGeneralExamsView(View):
         if academic_year_id and class_id and general_exam_id:
             # Redirect to GeneralExamResultsAvailabilityView with the selected data
             return redirect('general_exam_results_availability', 
+                            general_exam_id=general_exam_id, 
+                            class_id=class_id, 
+                            academic_year_id=academic_year_id)
+        
+        # If any fields are missing, render the form again with an error message
+        return self.get(request)
+
+
+class ManageExtraExamsDataView(View):
+    template_name = 'result_system/manage_extra_exams_data.html'
+
+    def get(self, request):
+        school = request.user.school
+        academic_years = AcademicYear.objects.filter(school=school).order_by('-year')
+
+        context = {
+            'academic_years': academic_years,
+        }
+
+        return render(request, self.template_name, context)
+    def post(self, request):
+        # Capture the form data: academic year, class, and general exam
+        academic_year_id = request.POST.get('academic_year')
+        class_id = request.POST.get('class')
+        general_exam_id = request.POST.get('general_exam')
+
+        # Ensure that all fields are selected
+        if academic_year_id and class_id and general_exam_id:
+            # Redirect to GeneralExamResultsAvailabilityView with the selected data
+            return redirect('extra_group_exam_data_availability', 
                             general_exam_id=general_exam_id, 
                             class_id=class_id, 
                             academic_year_id=academic_year_id)
@@ -1212,3 +1249,173 @@ def update_annual_results(request):
             # Handle any errors
             print(f"Error occurred: {str(e)}")
             return JsonResponse({"status": "error", "message": str(e)}, status=400)
+
+
+
+
+
+class ExtraGroupExamsDataAvailabilityView(View):
+    template_name = 'result_system/extra_group_exams_availability.html'
+
+    def get(self, request, academic_year_id, class_id, general_exam_id):
+        try:
+            with transaction.atomic():
+                academic_year = AcademicYear.objects.get(id=academic_year_id)
+                class_obj = Class.objects.get(id=class_id)
+                general_exam = GeneralExam.objects.get(id=general_exam_id)
+
+                # Fetch all students in the class
+                students = Student.objects.filter(current_class=class_obj, is_active=True)
+
+                # Initialize tracking of created and retrieved items
+                created_items = {'extraexamdata': 0}
+                retrieved_items = {'extraexamdata': 0}
+
+                # Process students for extra exam data
+                for student in students:
+                    extra_exam_data, created = ExtraExamData.objects.get_or_create(
+                        academic_year=academic_year,
+                        class_obj=class_obj,
+                        general_exam=general_exam,
+                        student=student,
+                        defaults={
+                            'absences': 0,
+                            'conduct': 5,  # default to 'Excellent'
+                            'human_investment': 5,  # default to 'Excellent'
+                            'fees_owed': 0.00,
+                            'participation_in_extracurricular': False,
+                            'remarks': ''
+                        }
+                    )
+
+                    if created:
+                        created_items['extraexamdata'] += 1
+                        print(f"Created ExtraExamData for student {student.get_full_name()}")
+                    else:
+                        retrieved_items['extraexamdata'] += 1
+                        print(f"Retrieved ExtraExamData for student {student.get_full_name()}")
+
+                # Prepare the student data for JSON format
+                students_data = [{
+                    'name': student.get_full_name(),
+                    'id': student.id
+                } for student in students]
+
+                # Fetch existing extra exam data entries for the current class and general exam
+                extra_exam_data_entries = ExtraExamData.objects.filter(
+                    academic_year=academic_year,
+                    class_obj=class_obj,
+                    general_exam=general_exam
+                ).select_related('student')
+
+                # Serialize extra exam data to be used by JS
+                extra_exam_data_json = [
+                    {
+                        'student': {
+                            'id': entry.student.id,
+                            'name': entry.student.get_full_name()
+                        },
+                        'absences': entry.absences,
+                        'conduct': entry.conduct,
+                        'human_investment': entry.human_investment,
+                        'fees_owed': float(entry.fees_owed),
+                        'participation_in_extracurricular': entry.participation_in_extracurricular,
+                        'remarks': entry.remarks
+                    }
+                    for entry in extra_exam_data_entries
+                ]
+
+                # Prepare the context and JSON encode the data
+                context = {
+                    'academic_year': academic_year,
+                    'class_obj': class_obj,
+                    'general_exam': general_exam,
+                    'students': json.dumps(students_data),  # Students data in JSON format
+                    'extra_exam_data': json.dumps(extra_exam_data_json),  # Extra exam data in JSON format
+                    'created_items': json.dumps(created_items),  # Track created items in JSON
+                    'retrieved_items': json.dumps(retrieved_items),  # Track retrieved items in JSON
+                }
+
+                # Print summary
+                print("\nSummary:")
+                print(f"Created items: {created_items}")
+                print(f"Retrieved items: {retrieved_items}")
+
+                return render(request, self.template_name, context)
+
+        except ObjectDoesNotExist as e:
+            print(f"Error: {str(e)}")
+            context = {'error': f"Required object not found: {str(e)}"}
+            return render(request, self.template_name, context)
+
+        except Exception as e:
+            print(f"Unexpected error: {str(e)}")
+            context = {'error': "An unexpected error occurred. Please try again."}
+            return render(request, self.template_name, context)
+
+
+
+
+
+@csrf_exempt
+def update_extra_exam_data(request):
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            updated_data = data.get('updated_data', {})
+
+            # Retrieve the academic year, class, and general exam from the request data
+            academic_year = AcademicYear.objects.get(id=data['academic_year_id'])
+            class_obj = Class.objects.get(id=data['class_id'])
+            general_exam = GeneralExam.objects.get(id=data['general_exam_id'])
+
+            print("Received data:", data)
+            print("Updated data:", updated_data)
+
+            for student_name, fields in updated_data.items():
+                print(f"Processing student: {student_name}")
+
+                # Retrieve all active students in the class
+                students_in_class = Student.objects.filter(current_class=class_obj, is_active=True)
+
+                # Concatenate first_name and last_name to match the full name
+                matching_students = students_in_class.annotate(
+                    full_name=Concat('first_name', Value(' '), 'last_name')
+                ).filter(full_name=student_name)
+
+                if matching_students.exists():
+                    student = matching_students.first()
+                    print(f"Found student: {student.get_full_name()}")
+                else:
+                    return JsonResponse({'status': 'error', 'message': f"Student {student_name} not found in class {class_obj.name}"})
+
+                # Retrieve the existing ExtraExamData entry for this student, academic year, class, and exam
+                try:
+                    extra_exam_data = ExtraExamData.objects.get(
+                        student=student,
+                        academic_year=academic_year,
+                        class_obj=class_obj,
+                        general_exam=general_exam
+                    )
+                    print(f"Found ExtraExamData for student: {student.get_full_name()}")
+                except ExtraExamData.DoesNotExist:
+                    return JsonResponse({'status': 'error', 'message': f"ExtraExamData for {student_name} not found."})
+
+                # Update the fields
+                extra_exam_data.absences = fields['absences']
+                extra_exam_data.conduct = fields['conduct']
+                extra_exam_data.human_investment = fields['human_investment']
+                extra_exam_data.fees_owed = fields['fees_owed']
+                extra_exam_data.participation_in_extracurricular = fields['participation'] == 'Yes'
+                extra_exam_data.remarks = fields['remarks']
+
+                # Save the updated data
+                extra_exam_data.save()
+                print(f"Updated ExtraExamData saved for student: {student_name}")
+
+            return JsonResponse({'status': 'success'})
+        except Exception as e:
+            print(f"Error occurred: {str(e)}")
+            return JsonResponse({'status': 'error', 'message': str(e)})
+
+    return JsonResponse({'status': 'error', 'message': 'Invalid request method'})

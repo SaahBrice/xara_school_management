@@ -429,15 +429,6 @@ class Exam(models.Model):
 
 
 
-
-
-
-
-
-
-
-
-
 class GradeSheet(models.Model):
     student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='grade_sheets')
     exam = models.ForeignKey('Exam', on_delete=models.CASCADE, related_name='grade_sheets')
@@ -721,6 +712,33 @@ class AnnualExamOverallStatistics(models.Model):
         return f"Overall Stats - {self.class_obj.name} - {self.annual_exam.name}"
 
 
+
+class ExtraExamData(models.Model):
+    RATING_CHOICES = [
+        (5, 'Excellent'),
+        (4, 'Very Good'),
+        (3, 'Satisfactory'),
+        (2, 'Unsatisfactory'),
+        (1, 'Poor'),
+    ]
+
+    academic_year = models.ForeignKey('AcademicYear', on_delete=models.CASCADE, related_name='extra_exam_data')
+    class_obj = models.ForeignKey('Class', on_delete=models.CASCADE, related_name='extra_exam_data')
+    general_exam = models.ForeignKey('GeneralExam', on_delete=models.CASCADE, related_name='extra_exam_data')
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='extra_exam_data')
+    absences = models.PositiveIntegerField(default=0, help_text="Number of absences during the exam period.")
+    conduct = models.PositiveIntegerField(choices=RATING_CHOICES,help_text="Conduct rating: 1 = Poor, to 5 = Excellent")
+    human_investment = models.PositiveIntegerField(choices=RATING_CHOICES,help_text="Human investment rating: 1 = Poor, to 5 = Excellent")
+    fees_owed = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('0.00'),help_text="Amount of fees owed in CFA.")
+    participation_in_extracurricular = models.BooleanField(default=False,help_text="Did the student participate in extracurricular activities?")
+    remarks = models.TextField(blank=True, help_text="General remarks or observations by teachers.", default="General student remark")
+
+    class Meta:
+        unique_together = ('academic_year', 'class_obj', 'general_exam', 'student')
+        verbose_name_plural = 'Extra Exam Data'
+
+    def __str__(self):
+        return f"Extra Data for {self.student.get_full_name()} in {self.class_obj.name} ({self.academic_year.year})"
 
 
 
