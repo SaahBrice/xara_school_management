@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        :root {
+            /* Color Variables */
+            --main-color: #007BFF; /* Primary Blue */
+            --main-color-medium: #6ab2ff; /* Primary Blue */
+            --main-color-dark: #0056b3; /* Darker Blue */
+            --main-color-light: #ecf6ff; /* Lighter Blue */
+            --text-color: #000000; /* Default Black Text */
+            --border-color-subtle: rgba(0, 0, 0, 0.3); /* Subtle black color for the horizontal line */
+
+            /* Font Size Variables */
+            --font-size-large: 18px;
+            --font-size-medium: 14px;
+            --font-size-small: 12px;
+
+            /* Layout Variables */
+            --padding: 20px;
+            --border-color: var(--text-color);
+            --paragraph-spacing: 2px; /* Reduced paragraph spacing */
+            --line-spacing: 2px; /* Spacing between the info and horizontal line */
+        }
+
+        body {
+            font-family: 'Times New Roman', Garamond, serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Header Section */
+        section.header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--padding);
+            border-bottom: 1px solid var(--border-color-subtle); /* Subtle horizontal line */
+            margin-bottom: var(--line-spacing); /* Reduced spacing between school info and line */
+        }
+        @media print {
+            * {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+        }
+        .header .logo {
+            width: 90px; /* Smaller logo size */
+            margin-right: 70px; /* Adds space between the logo and school info */
+            margin-left: -50px; /* Move the logo further left */
+        }
+
+        .school-info {
+            text-align: center; /* Center aligned the school info */
+        }
+
+        .school-info h1 {
+            margin: 0;
+            font-size: var(--font-size-large);
+            color: var(--text-color);
+            font-weight: bold;
+        }
+
+        .school-info p {
+            margin: var(--paragraph-spacing) 0; /* Reduced spacing between paragraphs */
+            font-size: var(--font-size-small);
+            color: var(--text-color);
+        }
+
+        .school-info a {
+            text-decoration: none;
+            color: var(--main-color);
+        }
+
+        /* Report Title Section */
+        section.report-title {
+            text-align: center;
+            margin-top: 10px;
+            font-size: var(--font-size-large);
+            font-weight: bold;
+            text-transform: uppercase;
+            color: var(--text-color);
+            padding-top: 5px;
+        }
+
+
+        /* Student Data Section */
+section.student-info {
+    margin: 10px auto;
+    width: 100%; /* Full width of the page */
+    font-family: 'Calibri', sans-serif;
+}
+
+.student-info table {
+    width: 100%; /* Full width of the page */
+    border-collapse: collapse;
+}
+
+.student-info th, .student-info td {
+    border: 1px solid var(--border-color-subtle);
+    padding: 2px; /* Reduce padding for smaller row height */
+    font-size: var(--font-size-medium);
+}
+
+.student-info th {
+    background-color: var(--main-color-light); /* Light fill color for title cells */
+    font-weight: bold;
+    text-align: left;
+}
+
+.student-info .small-text {
+    font-size: var(--font-size-small);
+    font-style: italic;
+    color: var(--text-color);
+    display: block;
+    margin-top: 2px; /* Small space between English and French text */
+}
+
+
+.student-info td span {
+    font-weight: normal;
+    padding-left: 5px;
+}
+
+
+/* Student Results Section */
+section.student-results {
+    margin: 10px auto;
+    width: 100%; /* Full width */
+    font-family: 'Calibri', sans-serif;
+}
+
+.student-results table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: center;
+}
+
+.student-results th, .student-results td {
+    border: 1px solid var(--border-color-subtle);
+    padding: 2px;
+    font-size: var(--font-size-medium);
+    text-align: center;
+}
+
+.student-results th {
+    background-color: var(--main-color-light); /* Light fill color for header */
+    font-weight: bold;
+    text-align: center;
+}
+
+.student-results .small-text {
+    font-size: var(--font-size-small);
+    font-style: italic;
+    margin-top: 2px;
+}
+
+.student-results .remark {
+    color: red; /* Marking remarks in red */
+}
+
+/* Exam Statistics Section */
+section.exam-statistics {
+    margin: 10px auto;
+    width: 100%; /* Full width */
+    font-family: 'Calibri', sans-serif;
+}
+
+.exam-statistics table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: center; /* Center-align table content */
+}
+
+.exam-statistics th, .exam-statistics td {
+    border: 1px solid var(--border-color-subtle);
+    padding: 2px;
+    font-size: var(--font-size-medium);
+}
+
+.exam-statistics th {
+    background-color: var(--main-color-light); /* Light fill color for title cells */
+    font-weight: bold;
+}
+
+.exam-statistics .small-text {
+    font-size: var(--font-size-small);
+    font-style: italic;
+    display: block;
+    margin-top: 1px;
+}
+
+/* Container for two side-by-side sections */
+.container {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px; /* Small space between the two sections */
+    margin: 20px auto;
+    width: 100%;
+    font-family: 'Calibri', sans-serif;
+}
+
+/* Left table should take less width */
+.container .table-left {
+    width: 30%; /* Left table takes 30% of the width */
+}
+
+/* Right table should take more width */
+.container .table-right {
+    width: 70%; /* Right table takes 70% of the width */
+}
+
+
+/* Custom styling for left and right tables only */
+.container .table-left table, .container .table-right table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: center;
+}
+
+.container .table-left th, .container .table-right th,
+.container .table-left td, .container .table-right td {
+    border: 1px solid var(--border-color-subtle);
+    padding: 8px;
+    font-size: var(--font-size-medium);
+}
+
+/* Header styles specific to these tables */
+.container .table-left th {
+    background-color: var(--main-color-light); /* Use main blue color */
+    font-weight: bold;
+}
+.container .table-right th {
+    background-color: var(--main-color-dark); /* Use main blue color */
+    color: white;
+    font-weight: bold;
+}
+
+.container .small-text {
+    font-size: var(--font-size-small);
+    font-style: italic;
+}
+
+.container .empty-cell {
+    background-color: #f0f0f0; /* Light gray for empty cells */
+}
+
+.container .highlight {
+    background-color: var(--main-color-light); /* Lighter blue highlight */
+}
+
+.container .passed {
+    background-color: var(--main-color-light);
+    font-weight: bold;
+    color: var(--main-color-dark); /* Darker blue for 'PASSED' */
+}
+
+/* Administration Section */
+section.administration {
+    width: 100%;
+    text-align: left;
+    padding: 10px 0;
+    border-top: 1px solid var(--border-color-subtle);
+
+}
+
+section.administration .admin-text {
+
+    font-weight: bold;
+    font-size: var(--font-size-medium);
+    letter-spacing: 1px; /* Slightly spaced letters */
+    font-family: 'Calibri', sans-serif;
+}
+
+
+    </style>
+    <title>Report Card Header</title>
+</head>
+<body>
+
+    <!-- Header Section -->
+    <section class="header">
+        <!-- Logo -->
+        <div>
+            <img src="logo.png" alt="School Logo" class="logo">
+        </div>
+        <!-- School Information -->
+        <div class="school-info">
+            <h1>XARA BILIGUAL COLLEGE (XABICOL)</h1>
+            <p>Motto: Hard Work-Prayers-Patience</p>
+            <p>P.O.BOX 402 FOREKE DSCHANG</p>
+            <p><a href="http://www.rainbowbilingualschooldschang.org" target="_blank">www.rainbowbilingualschooldschang.org</a></p>
+            <p>Email: info@rainbowbilingualschooldschang.org</p>
+            <p>Tel: +237 677 77 00 72 / +237 677 66 02 93</p>
+        </div>
+    </section>
+
+    <!-- Report Title Section -->
+    <section class="report-title">
+        REPORT CARD / BULLETIN DE NOTE
+    </section>
+<!-- Student Info Section -->
+<!-- Student Info Section -->
+<section class="student-info">
+    <table>
+            <tr>
+                <th style="width: 10%;">CLASS :<br><span class="small-text">Classe</span></th>
+                <td style="width: 35%;"><span>FORM1</span></td>
+                <th style="width: 10%;">EXAM :<br><span class="small-text">Examen</span></th>
+                <td class="term-cell" style="width: 15%;"><span>First Term</span></td>
+                <th style="width: 15%;">ACADEMIC YEAR :<br><span class="small-text">Année académique</span></th>
+                <td style="width: 20%;"><span>2023/2024</span></td>
+            </tr>
+            <tr>
+                <th style="width: 10%;">NAME :<br><span class="small-text">Noms</span></th>
+                <td class="name-cell" style="width: 35%;"><span>DOGNMOFACJ LEKAK STEVEN ORANKI</span></td>
+                <th style="width: 10%;">SEX :<br><span class="small-text">Sexe</span></th>
+                <td style="width: 15%;"><span>M</span></td>
+                <th style="width: 15%;">MATRICULE # :<br><span class="small-text"># Matricule</span></th>
+                <td style="width: 10%;"><span>XAR23F1178</span></td>
+            </tr>
+        
+    </table>
+</section>
+<!-- Student Results Section -->
+<section class="student-results">
+    <table>
+        <tr>
+            <th>SUBJECTS <br><span class="small-text">Matière</span></th>
+            <th>TERM1 <br><span class="small-text">Trimestre 1</span></th>
+            <th>TERM2 <br><span class="small-text">Trimestre 2</span></th>
+            <th>F.EXAM <br><span class="small-text">Examen Final</span></th>
+            <th>TOTAL <br><span class="small-text">Total</span></th>
+            <th>AVERAGE <br><span class="small-text">Moyenne</span></th>
+            <th>REMARK <br><span class="small-text">Remarque</span></th>
+            <th>FACILITATOR <br><span class="small-text">Facilitateur</span></th>
+        </tr>
+        <tr>
+            <td>English Language</td>
+            <td>14.00</td>
+            <td>14.00</td>
+            <td>14.00</td>
+            <td>42.00</td>
+            <td>14.00</td>
+            <td>FAIR</td>
+            <td>Mr. Nkengmomo</td>
+        </tr>
+        <tr>
+            <td>Literature in English</td>
+            <td>11.00</td>
+            <td>11.00</td>
+            <td>16.00</td>
+            <td>38.00</td>
+            <td>12.67</td>
+            <td>FAIR</td>
+            <td>Mr. Nkengmomo</td>
+        </tr>
+        <tr>
+            <td>Literature in English</td>
+            <td>11.00</td>
+            <td>11.00</td>
+            <td>16.00</td>
+            <td>38.00</td>
+            <td>12.67</td>
+            <td>FAIR</td>
+            <td>Mr. Nkengmomo</td>
+        </tr>
+        <tr>
+            <td>French</td>
+            <td>11.00</td>
+            <td>11.00</td>
+            <td>14.00</td>
+            <td>36.00</td>
+            <td>12.00</td>
+            <td>FAIR</td>
+            <td>Mr. Nkengmomo</td>
+        </tr>
+        <tr>
+            <td>History</td>
+            <td>11.00</td>
+            <td>11.00</td>
+            <td>17.00</td>
+            <td>39.00</td>
+            <td>13.00</td>
+            <td>FAIR</td>
+            <td>Mr. Nkengmomo</td>
+        </tr>
+        <tr>
+            <td>History</td>
+            <td>11.00</td>
+            <td>11.00</td>
+            <td>17.00</td>
+            <td>39.00</td>
+            <td>13.00</td>
+            <td>FAIR</td>
+            <td>Mr. Nkengmomo</td>
+        </tr>
+        <tr>
+            <td>Economics</td>
+            <td>11.00</td>
+            <td>11.00</td>
+            <td>11.00</td>
+            <td>33.00</td>
+            <td>11.00</td>
+            <td>AVERAGE</td>
+            <td>Mr. Nkengmomo</td>
+        </tr>
+        <tr>
+            <td>Geography</td>
+            <td>11.00</td>
+            <td>11.00</td>
+            <td>11.00</td>
+            <td>33.00</td>
+            <td>11.00</td>
+            <td>AVERAGE</td>
+            <td>Mr. Nkengmomo</td>
+        </tr>
+        <tr>
+            <td>Geography</td>
+            <td>11.00</td>
+            <td>11.00</td>
+            <td>11.00</td>
+            <td>33.00</td>
+            <td>11.00</td>
+            <td>AVERAGE</td>
+            <td>Mr. Nkengmomo</td>
+        </tr>
+        <tr>
+            <td>Citizenship Education</td>
+            <td><span class="remark">1.00</span></td>
+            <td><span class="remark">1.00</span></td>
+            <td>13.00</td>
+            <td>15.00</td>
+            <td><span class="remark">5.00</span></td>
+            <td><span class="remark">V.POOR</span></td>
+            <td>Mr. Nkengmomo</td>
+        </tr>
+        <tr>
+            <td>Geography</td>
+            <td>11.00</td>
+            <td>11.00</td>
+            <td>11.00</td>
+            <td>33.00</td>
+            <td>11.00</td>
+            <td>AVERAGE</td>
+            <td>Mr. Nkengmomo</td>
+        </tr>
+        <tr>
+            <td>Citizenship Education</td>
+            <td><span class="remark">1.00</span></td>
+            <td><span class="remark">1.00</span></td>
+            <td>13.00</td>
+            <td>15.00</td>
+            <td><span class="remark">5.00</span></td>
+            <td><span class="remark">V.POOR</span></td>
+            <td>Mr. Nkengmomo</td>
+        </tr>
+
+    </table>
+</section>
+<!-- Exam Statistics Section -->
+<section class="exam-statistics">
+    <table>
+        <tr>
+            <th rowspan="2"></th>
+            <th colspan="2">MARKS<br><span class="small-text">Notes</span></th>
+            <th colspan="2">SUBJECTS<br><span class="small-text">Matières</span></th>
+            <th colspan="2">STATUS<br><span class="small-text">Statut</span></th>
+            <th>CLASS<br><span class="small-text">Classe</span></th>
+        </tr>
+        <tr>
+            <th>Total<br><span class="small-text">Total</span></th>
+            <th>Average<br><span class="small-text">Moyenne</span></th>
+            <th>#Offered<br><span class="small-text">#Composées</span></th>
+            <th>#Passed<br><span class="small-text">#Réussies</span></th>
+            <th>Rank<br><span class="small-text">Position</span></th>
+            <th>Decision<br><span class="small-text">Décision</span></th>
+            <th>Average<br><span class="small-text">Moyenne</span></th>
+        </tr>
+        <tr>
+            <td>Sequence 1</td>
+            <td>118.67</td>
+            <td>10.79</td>
+            <td>11</td>
+            <td>10</td>
+            <td>1</td>
+            <td>PASSED</td>
+            <td>5.13</td>
+        </tr>
+        <tr>
+            <td>Sequence 2</td>
+            <td>112.00</td>
+            <td>10.18</td>
+            <td>11</td>
+            <td>10</td>
+            <td>1</td>
+            <td>PASSED</td>
+            <td>4.62</td>
+        </tr>
+        <tr>
+            <td>Sequence 3</td>
+            <td>155.00</td>
+            <td>14.09</td>
+            <td>11</td>
+            <td>11</td>
+            <td>1</td>
+            <td>PASSED</td>
+            <td>5.27</td>
+        </tr>
+    </table>
+</section>
+
+
+<div class="container">
+    <!-- Left Table (Absence, Conduct, Human Investment) -->
+    <div class="table-left">
+        <table>
+            <tr>
+                <th>Absence</th>
+                <td class="empty-cell">3</td>
+            </tr>
+            <tr>
+                <th>Conduct /<br><span class="small-text">Conduite</span></th>
+                <td class="empty-cell">Excellent</td>
+            </tr>
+            <tr>
+                <th>Human investment /<br><span class="small-text">Investissement Humain</span></th>
+                <td class="empty-cell">Excellent</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Right Table (Annual Statistics) -->
+    <div class="table-right">
+        <table>
+            <tr>
+                <th colspan="6">FINAL STATISTICS / Statistique Finale</th>
+            </tr>
+            <tr>
+                <th>Total<br><span class="small-text">Total</span></th>
+                <th>Average<br><span class="small-text">Moyenne</span></th>
+                <th>Rank<br><span class="small-text">Rang</span></th>
+                <th>Out of<br><span class="small-text">Sur</span></th>
+                <th>Decision<br><span class="small-text">Décision</span></th>
+            </tr>
+            <tr>
+                <td class="highlight">128.56</td>
+                <td class="highlight">11.69</td>
+                <td class="highlight">1</td>
+                <td class="highlight">6</td>
+                <td class="passed">PASSED<br><span class="small-text">RÉUSSI</span></td>
+            </tr>
+        </table>
+    </div>
+</div>
+<!-- Administration Section -->
+<section class="administration">
+    <div class="admin-text">ADMINISTRATION:</div>
+</section>
+
+</body>
+</html>

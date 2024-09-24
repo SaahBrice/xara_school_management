@@ -611,10 +611,43 @@
             }
         }).then((result) => {
             if (result.dismiss === Swal.DismissReason.cancel) {
-                // Handle print report functionality here
-                console.log('Print report for', student.name);
-                // For now, we'll just show an alert
-                Swal.fire('Print Report', 'Printing functionality will be implemented soon.', 'info');
+                // Extract IDs
+                const academicYearId = {{ academic_year.id }};
+                const classId = {{ class_obj.id }};
+                const examId = {{ exam.id }};
+                const studentId = student.name;
+        
+                // Create the payload object
+                const payload = {
+                    academic_year_id: academicYearId,
+                    class_id: classId,
+                    exam_id: examId,
+                    student_name: studentId
+                };
+        
+                // Send a POST request with the payload
+                fetch("{% url 'printstudentexam' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'  // Ensure CSRF token for security
+                    },
+                    body: JSON.stringify(payload)
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    return response.json();  // Ensure the response is JSON
+                })
+                .then(data => {
+                    if (data.status === 'success') {
+                        console.log('Print initiated');
+                    } else {
+                        console.error('Error initiating print');
+                    }
+                })
+                .catch(error => console.error('Error:', error));
             }
         });
     }

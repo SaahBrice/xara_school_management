@@ -36,7 +36,10 @@ def validate_file_size(value):
 
 class School(models.Model):
     name = models.CharField(max_length=255, unique=True)
+    moto = models.CharField(max_length=255, unique=True, null=True)
+    pobox = models.CharField(max_length=255, unique=True, null=True)
     code = models.CharField(max_length=10, unique=True)
+    logo = models.ImageField(upload_to='school}_logo/', blank=True, null=True)
     address = models.TextField(blank=True)
     phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)

@@ -29,4 +29,7 @@ urlpatterns = [
          views.AnnualExamResultsAvailabilityView.as_view(), 
          name='annual_exam_results_availability'),
 
+
+     path('print-student-exam/', views.PrintStudentExamView.as_view(), name='printstudentexam'),
+
 ]

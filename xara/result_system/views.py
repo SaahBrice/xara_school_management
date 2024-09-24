@@ -2,7 +2,7 @@ import json
 from django.shortcuts import render, redirect
 from django.views import View
 from django.http import JsonResponse
-from .models import AcademicYear, AnnualExam, AnnualExamClassStatistics, AnnualExamGradeSheet, AnnualExamOverallStatistics, AnnualExamSubjectGrade, Class, ClassSubject, Exam, ExtraExamData, GeneralExam, GeneralExamClassStatistics, GeneralExamGradeSheet, GeneralExamOverallStatistics, GeneralExamSubjectGrade, GradeSheet, Student, SubjectGrade, ClassStatistics, OverallStatistics, TeacherSubject
+from .models import AcademicYear, AnnualExam, AnnualExamClassStatistics, AnnualExamGradeSheet, AnnualExamOverallStatistics, AnnualExamSubjectGrade, Class, ClassSubject, Exam, ExtraExamData, GeneralExam, GeneralExamClassStatistics, GeneralExamGradeSheet, GeneralExamOverallStatistics, GeneralExamSubjectGrade, GradeSheet, School, Student, SubjectGrade, ClassStatistics, OverallStatistics, TeacherSubject
 from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction
 from django.db.models import Prefetch
@@ -1419,3 +1419,65 @@ def update_extra_exam_data(request):
             return JsonResponse({'status': 'error', 'message': str(e)})
 
     return JsonResponse({'status': 'error', 'message': 'Invalid request method'})
+
+
+
+
+class PrintStudentExamView(View):
+    def post(self, request):
+        # Parse the JSON payload
+        data = json.loads(request.body)
+
+        # Retrieve parameters from the request payload
+        academic_year_id = data.get('academic_year_id')
+        class_id = data.get('class_id')
+        exam_id = data.get('exam_id')
+        student_name = data.get('student_name')  # Full name provided in the payload
+        print(student_name)
+
+        # Fetch the academic year
+        academic_year = get_object_or_404(AcademicYear, id=academic_year_id)
+        print(academic_year)
+        
+        # Fetch the class that is part of this academic year
+        class_obj = get_object_or_404(Class, id=class_id, academic_year=academic_year)
+        print(class_obj)
+        # Fetch the students in this class
+        students_in_class = Student.objects.filter(current_class=class_obj)
+        print(students_in_class)
+        # Find the student by comparing the full name
+        student = None
+        for student_obj in students_in_class:
+            print(student_obj.get_full_name())
+            print(student_name)
+            if student_obj.get_full_name() == student_name:
+                print(student_name)
+                student = student_obj
+                break
+
+        # If no student is found, return an error response
+        if not student:
+            return JsonResponse({"status": "error", "message": "Student not found"}, status=404)
+        
+        exam = Exam.objects.get(id=exam_id, academic_year=academic_year)
+        school = School.objects.first()  # Assuming single school instance or SystemSettings
+        grade_sheet = GradeSheet.objects.get(student=student,academic_year=academic_year, class_obj=class_obj, exam=exam)
+        subject_stats = ClassStatistics.objects.filter(academic_year=academic_year, class_obj=class_obj, exam=exam)
+        class_subjects = ClassSubject.objects.filter(class_obj=class_obj)
+        overall_class_stat = OverallStatistics.objects.get(academic_year=academic_year, class_obj=class_obj, exam=exam)
+        subject_grades = SubjectGrade.objects.filter(grade_sheet=grade_sheet)
+
+        context = {
+            'school': school,
+            'academic_year': academic_year,
+            'class_obj': class_obj,
+            'exam': exam,
+            'student': student,
+            'grade_sheet': grade_sheet,
+            'subject_grades': subject_grades,
+            'subject_stats': subject_stats,
+            'class_subjects': class_subjects,
+            'overall_class_stat': overall_class_stat,
+        }
+        print(context)
+        return render(request, 'report_card_template.html', context)
